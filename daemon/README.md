@@ -69,7 +69,7 @@ cp daemon/.env.example daemon/.env                   # COUCHDB_PASSWORD + Pushov
 | --- | --- |
 | `couch.url` | CouchDB base URL, e.g. `https://couch.example.org`. |
 | `couch.database` | Database name (the LiveSync `couchDB_DBNAME`). |
-| `couch.username` / `couch.password` | CouchDB credentials (a read-only account is ideal). |
+| `couch.username` / `couch.password` | CouchDB credentials. |
 | `statePath` | Where "already notified" state is stored (default `./state.json`). |
 | `timezone` | IANA zone for dates without an explicit `~z=` (default: system). |
 | `tickIntervalMs` | How often changes are polled + due reminders checked (default 30000). |
@@ -79,10 +79,6 @@ cp daemon/.env.example daemon/.env                   # COUCHDB_PASSWORD + Pushov
 
 Secrets can be supplied via environment (`.env` or the process env) and override
 the config file: `COUCHDB_PASSWORD`, `PUSHOVER_TOKEN`, `PUSHOVER_USER`.
-
-Tip: point `couch.username`/`password` at a **read-only CouchDB account** for
-defence in depth. The daemon never writes, but a read-only credential guarantees
-it - see the LiveSync docs for setting up a reader user.
 
 ## Running
 

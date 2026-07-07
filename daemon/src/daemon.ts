@@ -6,6 +6,11 @@ import { CouchSource } from "./couchSource";
 import { extractReminders, Reminder, REMINDER_LABELS } from "./reminders";
 import { State } from "./state";
 import { Notification, sendPushover } from "./pushover";
+import { formatPill, parseToken } from "obsidian-now-datecore";
+
+function escapeHtml(s: string): string {
+	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 export class ReminderDaemon {
 	private source: CouchSource;
@@ -132,11 +137,33 @@ export class ReminderDaemon {
 
 	private buildNotification(r: Reminder): Notification {
 		const noteTitle = path.basename(r.filePath).replace(/\.md$/i, "");
-		const context = r.lineText.length > 200 ? r.lineText.slice(0, 197) + "..." : r.lineText;
-		const message = `${REMINDER_LABELS[r.reminder]} - ${r.eventHuman}` + (context ? `\n${context}` : "");
+
+		// Render the date the way the plugin pill does (formatted display, not the
+		// raw @token), coloured red/blue like the pill and with an alarm glyph.
+		const parsed = parseToken(r.raw);
+		const pillText = parsed
+			? formatPill(parsed.date, parsed.hasTime, {
+					format: parsed.format,
+					timeFormat: parsed.timeFormat ?? "12",
+					tz: parsed.tz,
+			  })
+			: r.raw;
+		const colour = r.fireMillis <= Date.now() ? "#e5534b" : "#4a90d9";
+		const CLOCK = "\u{23f0}";
+		const pillHtml = `<b><font color="${colour}">${escapeHtml(pillText)}</font></b> ${CLOCK}`;
+
+		const raw = r.lineText.length > 300 ? r.lineText.slice(0, 297) + "..." : r.lineText;
+		// The token has no HTML-special chars, so escape then swap it for the pill.
+		const contextHtml = escapeHtml(raw).replace(escapeHtml(r.raw), pillHtml);
+
+		const message =
+			`<b>${escapeHtml(REMINDER_LABELS[r.reminder])}</b> - <i>${escapeHtml(r.eventHuman)}</i>` +
+			(raw ? `\n${contextHtml}` : "");
+
 		const n: Notification = {
 			title: `Reminder: ${noteTitle}`,
 			message,
+			html: true,
 			timestamp: Math.floor(r.fireMillis / 1000),
 		};
 		// obsidian://open resolves the file via linkpath, so use the path without

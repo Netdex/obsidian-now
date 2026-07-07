@@ -4,6 +4,7 @@ import { log } from "./logger";
 export interface Notification {
 	title: string;
 	message: string;
+	html?: boolean; // message uses Pushover's HTML subset
 	url?: string;
 	urlTitle?: string;
 	timestamp?: number; // epoch seconds
@@ -22,6 +23,7 @@ export async function sendPushover(
 	body.set("user", cfg.user);
 	body.set("title", n.title);
 	body.set("message", n.message);
+	if (n.html) body.set("html", "1");
 	if (cfg.device) body.set("device", cfg.device);
 	if (typeof cfg.priority === "number") body.set("priority", String(cfg.priority));
 	if (n.url) body.set("url", n.url);

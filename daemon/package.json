@@ -1,0 +1,33 @@
+{
+	"name": "obsidian-remind",
+	"version": "1.0.0",
+	"description": "Daemon that reads a Self-hosted LiveSync CouchDB vault read-only and sends Pushover notifications for @date reminders written by the obsidian-now plugin.",
+	"license": "MIT",
+	"author": "netdex",
+	"main": "dist/src/index.js",
+	"bin": {
+		"obsidian-remind": "dist/src/index.js"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"bundle": "esbuild src/index.ts src/healthcheck.ts --bundle --platform=node --target=node20 --format=cjs --outdir=dist --out-extension:.js=.cjs",
+		"start": "node dist/src/index.js",
+		"dev": "tsc -p tsconfig.json -w",
+		"check": "tsc -p tsconfig.json --noEmit",
+		"test": "npm run build && node --test dist/test/*.test.js"
+	},
+	"dependencies": {
+		"dotenv": "^16.4.5",
+		"luxon": "^3.4.4",
+		"obsidian-now-datecore": "*"
+	},
+	"devDependencies": {
+		"@types/luxon": "^3.4.2",
+		"@types/node": "^20.11.30",
+		"esbuild": "^0.20.2",
+		"typescript": "^5.4.3"
+	},
+	"engines": {
+		"node": ">=18"
+	}
+}

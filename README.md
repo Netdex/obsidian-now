@@ -16,6 +16,20 @@ Optionally enable **Include time** in the picker to get:
 Inserted dates are highlighted as pills. **Click a pill** to reopen the picker
 and edit the date. Pills are highlighted in reading view as well.
 
+## Repository layout
+
+This is an npm-workspaces monorepo:
+
+- **`/`** (root) - the Obsidian plugin (`manifest.json`, `main.js`, `src/`).
+- **`packages/datecore`** - `obsidian-now-datecore`, the shared date-token
+  grammar/parsing (pure TS, no deps), used by both the plugin and the daemon.
+- **`daemon/`** - `obsidian-remind`, a headless daemon that reads a LiveSync
+  CouchDB vault read-only and sends Pushover reminders. See
+  [daemon/README.md](daemon/README.md).
+
+`npm run build` builds datecore then the plugin; `npm run build:daemon` builds
+datecore then the daemon.
+
 ## Usage
 
 - Type `@` -> the calendar pops up at the caret.

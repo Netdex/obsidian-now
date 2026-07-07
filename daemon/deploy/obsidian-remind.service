@@ -1,0 +1,17 @@
+[Unit]
+Description=obsidian-remind (Pushover reminders for Obsidian LiveSync vault)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust WorkingDirectory, ExecStart, and User for your install.
+WorkingDirectory=/opt/obsidian-remind
+ExecStart=/usr/bin/node /opt/obsidian-remind/dist/src/index.js --config /etc/obsidian-remind/config.json
+Restart=on-failure
+RestartSec=5
+# Secrets can be provided via an EnvironmentFile instead of config.json:
+# EnvironmentFile=/etc/obsidian-remind/obsidian-remind.env
+
+[Install]
+WantedBy=multi-user.target

@@ -1,3 +1,10 @@
 node_modules/
 main.js
 *.js.map
+dist/
+**/dist/
+# daemon runtime files
+daemon/.env
+daemon/config.json
+daemon/state.json
+_live/

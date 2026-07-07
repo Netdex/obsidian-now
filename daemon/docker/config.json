@@ -1,0 +1,14 @@
+{
+	"couch": {
+		"url": "https://couch.example.org",
+		"database": "obsidian",
+		"username": "obsidian",
+		"password": ""
+	},
+	"statePath": "/state/state.json",
+	"timezone": null,
+	"tickIntervalMs": 30000,
+	"missedGraceMs": 86400000,
+	"obsidianVault": "MyVault",
+	"pushover": { "token": "", "user": "", "priority": 0 }
+}

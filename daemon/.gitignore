@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+# Anchored to the repo root so the tracked sample docker/config.json is not
+# ignored by this rule.
+/config.json
+/state.json
+*.log
+_live/

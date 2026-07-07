@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+dist
+**/dist
+main.js
+.git
+.github
+_smoke
+_live
+**/.env
+**/config.json
+**/state.json
+*.log

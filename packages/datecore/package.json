@@ -1,0 +1,15 @@
+{
+	"name": "obsidian-now-datecore",
+	"version": "1.0.0",
+	"description": "Shared date-token grammar and parsing for obsidian-now and obsidian-remind. Pure TypeScript, no runtime dependencies.",
+	"license": "MIT",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsc -p tsconfig.json",
+		"check": "tsc -p tsconfig.json --noEmit"
+	}
+}

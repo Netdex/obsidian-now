@@ -1,0 +1,36 @@
+name: obsidian-remind
+
+# A single service: it reads your Self-hosted LiveSync CouchDB vault read-only
+# and sends Pushover reminders. No LiveSync CLI, no vault mirror -- it talks to
+# CouchDB's REST API directly and never writes.
+#
+# Setup:
+#   1. Edit docker/config.json (couch.url/database/username, timezone, etc.).
+#   2. Put COUCHDB_PASSWORD, PUSHOVER_TOKEN, PUSHOVER_USER in a .env file here.
+#   3. docker compose up -d
+
+services:
+  remind:
+    image: ghcr.io/netdex/obsidian-remind:main
+    # To build locally instead of pulling, uncomment (context is the repo root
+    # because the daemon depends on the datecore workspace):
+    # build:
+    #   context: ..
+    #   dockerfile: daemon/Dockerfile
+    environment:
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?set COUCHDB_PASSWORD in .env}
+      PUSHOVER_TOKEN: ${PUSHOVER_TOKEN:?set PUSHOVER_TOKEN in .env}
+      PUSHOVER_USER: ${PUSHOVER_USER:?set PUSHOVER_USER in .env}
+    volumes:
+      - ./docker/config.json:/config/config.json:ro
+      - remind-state:/state
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.cjs"]
+      interval: 60s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  remind-state:

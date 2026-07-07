@@ -3,10 +3,18 @@
 	"version": "1.0.0",
 	"description": "Type @ to open a date picker and insert an inline date, Notion-style.",
 	"main": "main.js",
+	"workspaces": [
+		"packages/*",
+		"daemon"
+	],
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"build": "npm run build -w obsidian-now-datecore && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"build:daemon": "npm run build -w obsidian-now-datecore && npm run build -w obsidian-remind",
 		"release": "node release.mjs"
+	},
+	"dependencies": {
+		"obsidian-now-datecore": "*"
 	},
 	"keywords": [
 		"obsidian",

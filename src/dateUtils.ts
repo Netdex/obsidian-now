@@ -1,13 +1,16 @@
 // A date is stored in the document in a canonical, machine-readable form so the
 // underlying instant never drifts (relative labels like "Today" are recomputed
-// on render, so they can't go stale). The per-date display format is encoded as
-// a hidden "~code" suffix that the pill widget hides from view:
+// on render, so they can't go stale). Per-date display preferences are encoded
+// as hidden "~" suffix segments that the pill widget hides from view:
 //
-//   @2026-07-05            -> absolute, shown as ISO 2026-07-05
-//   @2026-07-05~rel        -> shown relative, e.g. "Today"
-//   @2026-07-05 09:00~full -> "July 5, 2026 09:00"
+//   @2026-07-05                     -> absolute, shown as ISO 2026-07-05
+//   @2026-07-05~rel                 -> shown relative, e.g. "Monday"
+//   @2026-07-05 09:00~full~t12      -> "July 5, 2026 9:00 AM"
+//   @2026-07-05 09:00~rel~t24~z=America/New_York -> "Monday 09:00 EDT"
 //
-// The suffix is only ever seen by someone opening the note without this plugin.
+// Segments: date format (rel/full/short/mdy/dmy/ymd; iso = none),
+// time format (t12/t24), timezone (z=<IANA>). The suffix is only ever seen by
+// someone opening the note without this plugin.
 
 export type DateFormat =
 	| "iso"
@@ -18,7 +21,14 @@ export type DateFormat =
 	| "dmy"
 	| "ymd";
 
-// Order + labels for the picker's format menu (Notion-style).
+export type TimeFormat = "12" | "24";
+
+export interface DisplayOpts {
+	format: DateFormat;
+	timeFormat: TimeFormat;
+	tz: string | null; // IANA name, or null for local (no label)
+}
+
 export const DATE_FORMAT_ORDER: DateFormat[] = [
 	"rel",
 	"full",
@@ -41,42 +51,43 @@ export const DATE_FORMAT_LABELS: Record<DateFormat, string> = {
 
 const FORMAT_CODES = new Set<string>(["rel", "full", "short", "mdy", "dmy", "ymd"]);
 
-// @YYYY-MM-DD [ HH:mm] [~code]
+// A curated timezone list for the picker menu (plus "Local" = null).
+export const COMMON_TIMEZONES = [
+	"UTC",
+	"America/New_York",
+	"America/Chicago",
+	"America/Denver",
+	"America/Los_Angeles",
+	"America/Toronto",
+	"Europe/London",
+	"Europe/Paris",
+	"Europe/Berlin",
+	"Asia/Kolkata",
+	"Asia/Shanghai",
+	"Asia/Tokyo",
+	"Australia/Sydney",
+];
+
+// @YYYY-MM-DD [ HH:mm] [~segments]
 export const DATE_TOKEN_REGEX =
-	/@(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?(?:~(rel|full|short|mdy|dmy|ymd))?/;
+	/@(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?((?:~(?:rel|full|short|mdy|dmy|ymd|t12|t24|z=[A-Za-z0-9_+\/-]+))*)/;
 
 export function dateTokenRegexGlobal(): RegExp {
 	return new RegExp(DATE_TOKEN_REGEX.source, "g");
 }
 
 export const MONTH_NAMES_FULL = [
-	"January",
-	"February",
-	"March",
-	"April",
-	"May",
-	"June",
-	"July",
-	"August",
-	"September",
-	"October",
-	"November",
-	"December",
+	"January", "February", "March", "April", "May", "June",
+	"July", "August", "September", "October", "November", "December",
 ];
 
 export const MONTH_NAMES_SHORT = [
-	"Jan",
-	"Feb",
-	"Mar",
-	"Apr",
-	"May",
-	"Jun",
-	"Jul",
-	"Aug",
-	"Sep",
-	"Oct",
-	"Nov",
-	"Dec",
+	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+export const WEEKDAY_NAMES_FULL = [
+	"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 ];
 
 export const WEEKDAY_HEADERS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -85,6 +96,8 @@ export interface ParsedDate {
 	date: Date;
 	hasTime: boolean;
 	format: DateFormat;
+	timeFormat: TimeFormat | null; // null -> caller falls back to a default
+	tz: string | null;
 }
 
 function pad(n: number): string {
@@ -117,11 +130,13 @@ function isoDate(d: Date): string {
 export function formatToken(
 	date: Date,
 	hasTime: boolean,
-	format: DateFormat
+	opts: DisplayOpts
 ): string {
 	let s = "@" + isoDate(date);
 	if (hasTime) s += ` ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-	if (format !== "iso") s += "~" + format;
+	if (opts.format !== "iso") s += "~" + opts.format;
+	if (hasTime) s += opts.timeFormat === "24" ? "~t24" : "~t12";
+	if (hasTime && opts.tz) s += "~z=" + opts.tz;
 	return s;
 }
 
@@ -139,11 +154,17 @@ export function parseToken(token: string): ParsedDate | null {
 		0
 	);
 	if (isNaN(date.getTime())) return null;
-	const code = m[6];
-	const format: DateFormat = code && FORMAT_CODES.has(code)
-		? (code as DateFormat)
-		: "iso";
-	return { date, hasTime, format };
+
+	let format: DateFormat = "iso";
+	let timeFormat: TimeFormat | null = null;
+	let tz: string | null = null;
+	for (const seg of (m[6] || "").split("~").filter(Boolean)) {
+		if (FORMAT_CODES.has(seg)) format = seg as DateFormat;
+		else if (seg === "t12") timeFormat = "12";
+		else if (seg === "t24") timeFormat = "24";
+		else if (seg.startsWith("z=")) tz = seg.slice(2);
+	}
+	return { date, hasTime, format, timeFormat, tz };
 }
 
 function relativeLabel(date: Date): string {
@@ -153,8 +174,10 @@ function relativeLabel(date: Date): string {
 	if (diff === 0) return "Today";
 	if (diff === 1) return "Tomorrow";
 	if (diff === -1) return "Yesterday";
-	if (diff > 1 && diff <= 6) return `in ${diff} days`;
-	if (diff < -1 && diff >= -6) return `${-diff} days ago`;
+	const weekday = WEEKDAY_NAMES_FULL[date.getDay()];
+	if (diff >= 2 && diff <= 6) return weekday;
+	if (diff >= 7 && diff <= 13) return "Next " + weekday;
+	if (diff <= -2 && diff >= -7) return "Last " + weekday;
 	// Far away: fall back to a readable absolute date.
 	return `${MONTH_NAMES_SHORT[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
@@ -181,19 +204,65 @@ function datePart(date: Date, format: DateFormat): string {
 	}
 }
 
-// The human-facing text shown inside the pill.
+function timeText(date: Date, timeFormat: TimeFormat): string {
+	const h = date.getHours();
+	const m = date.getMinutes();
+	if (timeFormat === "24") return `${pad(h)}:${pad(m)}`;
+	const ampm = h < 12 ? "AM" : "PM";
+	let hr = h % 12;
+	if (hr === 0) hr = 12;
+	return `${hr}:${pad(m)} ${ampm}`;
+}
+
+// Short timezone label for a given instant (DST-aware via Intl), e.g. "EDT".
+export function tzAbbrev(date: Date, tz: string): string {
+	try {
+		const parts = new Intl.DateTimeFormat("en-US", {
+			timeZone: tz,
+			timeZoneName: "short",
+			hour: "2-digit",
+		}).formatToParts(date);
+		return parts.find((p) => p.type === "timeZoneName")?.value ?? "";
+	} catch {
+		return "";
+	}
+}
+
+// Friendly menu label for a timezone value ("local" or an IANA name).
+export function tzMenuLabel(tz: string | null): string {
+	if (!tz) return "Local";
+	const city = tz.split("/").pop() ?? tz;
+	return city.replace(/_/g, " ");
+}
+
+// The human-facing text (no leading "@").
 export function formatDisplay(
 	date: Date,
 	hasTime: boolean,
-	format: DateFormat
+	opts: DisplayOpts
 ): string {
-	let s = datePart(date, format);
-	if (hasTime) s += ` ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+	let s = datePart(date, opts.format);
+	if (hasTime) {
+		s += " " + timeText(date, opts.timeFormat);
+		if (opts.tz) {
+			const ab = tzAbbrev(date, opts.tz);
+			if (ab) s += " " + ab;
+		}
+	}
 	return s;
 }
 
+// What the pill shows: the "@" stays visible even for relative dates.
+export function formatPill(
+	date: Date,
+	hasTime: boolean,
+	opts: DisplayOpts
+): string {
+	return "@" + formatDisplay(date, hasTime, opts);
+}
+
 // ---------------------------------------------------------------------------
-// Natural-language parsing for inline typing ("@today", "@in 3 days", ...).
+// Natural-language parsing for inline typing ("@today", "@next friday", ...).
 // ---------------------------------------------------------------------------
 
 export interface NLResult {
@@ -203,20 +272,12 @@ export interface NLResult {
 	format: DateFormat; // suggested format for absolute inputs
 }
 
-const WEEKDAYS = [
-	"sunday",
-	"monday",
-	"tuesday",
-	"wednesday",
-	"thursday",
-	"friday",
-	"saturday",
-];
+const WEEKDAYS_LC = WEEKDAY_NAMES_FULL.map((w) => w.toLowerCase());
 
 function weekdayIndex(s: string): number {
 	if (s.length < 3) return -1;
 	const key = s.slice(0, 3);
-	return WEEKDAYS.findIndex((w) => w.slice(0, 3) === key);
+	return WEEKDAYS_LC.findIndex((w) => w.slice(0, 3) === key);
 }
 
 function weekdayDate(today: Date, wd: number, mod: string | undefined): Date {
@@ -277,16 +338,10 @@ export function parseNaturalDate(input: string): NLResult | null {
 	if (m) {
 		const wd = weekdayIndex(m[2]);
 		if (wd >= 0) {
-			return {
-				date: weekdayDate(today, wd, m[1]),
-				hasTime: false,
-				relative: true,
-				format: "rel",
-			};
+			return { date: weekdayDate(today, wd, m[1]), hasTime: false, relative: true, format: "rel" };
 		}
 	}
 
-	// Explicit ISO -> keep as ISO.
 	m = q.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ t](\d{1,2}):(\d{2}))?$/);
 	if (m) {
 		const d = new Date(+m[1], +m[2] - 1, +m[3], m[4] ? +m[4] : 0, m[5] ? +m[5] : 0);
@@ -295,7 +350,6 @@ export function parseNaturalDate(input: string): NLResult | null {
 		}
 	}
 
-	// "jul 5", "July 5, 2026"
 	m = q.match(/^([a-z]+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?$/);
 	if (m) {
 		const mi = monthIndex(m[1]);
@@ -306,7 +360,6 @@ export function parseNaturalDate(input: string): NLResult | null {
 			}
 		}
 	}
-	// "5 jul", "5 July 2026"
 	m = q.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]+)\.?(?:,?\s+(\d{4}))?$/);
 	if (m) {
 		const mi = monthIndex(m[2]);
@@ -318,7 +371,6 @@ export function parseNaturalDate(input: string): NLResult | null {
 		}
 	}
 
-	// Numeric slashes -> assume Month/Day/Year.
 	m = q.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
 	if (m) {
 		const year = m[3] ? normYear(+m[3]) : today.getFullYear();

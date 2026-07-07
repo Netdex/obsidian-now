@@ -1,17 +1,22 @@
 import {
+	COMMON_TIMEZONES,
 	DateFormat,
 	DATE_FORMAT_LABELS,
 	DATE_FORMAT_ORDER,
 	MONTH_NAMES_FULL,
+	TimeFormat,
 	WEEKDAY_HEADERS,
-	formatDisplay,
+	formatPill,
 	isSameDay,
+	tzMenuLabel,
 } from "./dateUtils";
 
 export interface PickerValue {
 	date: Date;
 	hasTime: boolean;
 	format: DateFormat;
+	timeFormat: TimeFormat;
+	tz: string | null;
 }
 
 export interface DatePickerOptions {
@@ -19,11 +24,24 @@ export interface DatePickerOptions {
 	initialDate: Date;
 	initialHasTime: boolean;
 	initialFormat: DateFormat;
+	initialTimeFormat: TimeFormat;
+	initialTz: string | null;
 	// "new" is used while typing inline (editor keeps focus, plugin drives keys);
 	// "edit" is used when a pill is clicked (picker handles its own keys).
 	mode: "new" | "edit";
 	onSubmit: (value: PickerValue) => void;
+	onClear: () => void;
 	onCancel: () => void;
+}
+
+interface MenuOption {
+	value: string;
+	label: string;
+}
+
+interface MenuHandle {
+	valueEl: HTMLElement;
+	refresh: () => void;
 }
 
 // A self-contained floating calendar popup. The plugin owns its lifecycle and,
@@ -35,18 +53,22 @@ export class DatePicker {
 	private previewEl!: HTMLElement;
 	private timeInput!: HTMLInputElement;
 	private timeToggle!: HTMLInputElement;
-	private formatValueEl!: HTMLElement;
-	private formatList!: HTMLElement;
+
+	private fmtMenu!: MenuHandle;
+	private timeMenu!: MenuHandle;
+	private tzMenu!: MenuHandle;
 
 	private viewDate: Date;
 	private selected: Date;
 	private hasTime: boolean;
 	private format: DateFormat;
+	private timeFormat: TimeFormat;
+	private tz: string | null;
 	private readonly mode: "new" | "edit";
 	private submitted = false;
-	private formatListOpen = false;
 
 	private onSubmit: DatePickerOptions["onSubmit"];
+	private onClear: DatePickerOptions["onClear"];
 	private onCancel: DatePickerOptions["onCancel"];
 	private anchor: DatePickerOptions["coords"];
 
@@ -54,8 +76,6 @@ export class DatePicker {
 		if (!this.root.contains(e.target as Node)) this.close(true);
 	};
 	private readonly onKeyDown = (e: KeyboardEvent) => {
-		// Only "edit" mode captures keys; while typing inline the plugin's
-		// editor keymap owns Enter/Escape/arrows instead.
 		if (this.mode !== "edit") return;
 		switch (e.key) {
 			case "Escape":
@@ -97,14 +117,16 @@ export class DatePicker {
 		);
 		this.hasTime = opts.initialHasTime;
 		this.format = opts.initialFormat;
+		this.timeFormat = opts.initialTimeFormat;
+		this.tz = opts.initialTz;
 		this.mode = opts.mode;
 		this.onSubmit = opts.onSubmit;
+		this.onClear = opts.onClear;
 		this.onCancel = opts.onCancel;
 		this.anchor = opts.coords;
 
 		this.root = document.createElement("div");
 		this.root.className = "now-datepicker";
-		// Keep clicks inside from disturbing the editor selection.
 		this.root.addEventListener("mousedown", (e) => e.preventDefault());
 		document.body.appendChild(this.root);
 
@@ -127,6 +149,8 @@ export class DatePicker {
 			date: new Date(this.selected.getTime()),
 			hasTime: this.hasTime,
 			format: this.format,
+			timeFormat: this.timeFormat,
+			tz: this.tz,
 		};
 	}
 
@@ -139,6 +163,7 @@ export class DatePicker {
 		this.selected.setHours(date.getHours(), date.getMinutes(), 0, 0);
 		this.viewDate = new Date(date.getFullYear(), date.getMonth(), 1);
 		this.renderMonth();
+		this.refreshMenus();
 		this.updatePreview();
 	}
 
@@ -147,12 +172,13 @@ export class DatePicker {
 		this.timeToggle.checked = hasTime;
 		this.timeInput.disabled = !hasTime;
 		if (hasTime) this.timeInput.value = this.timeString();
+		this.refreshMenus();
 		this.updatePreview();
 	}
 
 	setFormat(format: DateFormat): void {
 		this.format = format;
-		this.formatValueEl.setText(DATE_FORMAT_LABELS[format]);
+		this.refreshMenus();
 		this.updatePreview();
 	}
 
@@ -168,7 +194,6 @@ export class DatePicker {
 		);
 	}
 
-	// Optional hint (e.g. "No match"); falls back to the formatted selection.
 	setPreview(message?: string): void {
 		this.updatePreview(message);
 	}
@@ -192,10 +217,7 @@ export class DatePicker {
 
 		this.headerLabel = header.createDiv({ cls: "now-dp-title" });
 
-		const nowBtn = header.createEl("button", {
-			cls: "now-dp-now",
-			text: "Now",
-		});
+		const nowBtn = header.createEl("button", { cls: "now-dp-now", text: "Now" });
 		nowBtn.addEventListener("click", () => this.setSelectedDate(new Date()));
 
 		const next = header.createEl("button", { cls: "now-dp-nav", text: ">" });
@@ -209,53 +231,79 @@ export class DatePicker {
 
 		this.gridEl = this.root.createDiv({ cls: "now-dp-grid" });
 
-		// Date format row + collapsible menu.
-		const fmtRow = this.root.createDiv({ cls: "now-dp-row now-dp-format-row" });
-		fmtRow.createSpan({ cls: "now-dp-row-label", text: "Date format" });
-		this.formatValueEl = fmtRow.createSpan({
-			cls: "now-dp-row-value",
-			text: DATE_FORMAT_LABELS[this.format],
-		});
-		fmtRow.createSpan({ cls: "now-dp-row-chevron", text: ">" });
-		fmtRow.addEventListener("click", () => this.toggleFormatList());
+		// Date format menu.
+		this.fmtMenu = this.addMenuRow(
+			"Date format",
+			() => DATE_FORMAT_LABELS[this.format],
+			DATE_FORMAT_ORDER.map((f) => ({ value: f, label: DATE_FORMAT_LABELS[f] })),
+			() => this.format,
+			(v) => this.setFormat(v as DateFormat)
+		);
 
-		this.formatList = this.root.createDiv({ cls: "now-dp-format-list" });
-		this.formatList.style.display = "none";
-		for (const fmt of DATE_FORMAT_ORDER) {
-			const item = this.formatList.createDiv({
-				cls: "now-dp-format-item",
-				text: DATE_FORMAT_LABELS[fmt],
-			});
-			item.addEventListener("click", () => {
-				this.setFormat(fmt);
-				this.toggleFormatList(false);
-			});
-		}
-
-		// Time row.
+		// Include time toggle.
 		const timeRow = this.root.createDiv({ cls: "now-dp-row" });
 		const label = timeRow.createEl("label", { cls: "now-dp-time-label" });
 		this.timeToggle = label.createEl("input", { type: "checkbox" });
 		this.timeToggle.checked = this.hasTime;
 		label.createSpan({ text: "Include time" });
-
 		this.timeInput = timeRow.createEl("input", {
 			type: "time",
 			cls: "now-dp-time-input",
 		});
 		this.timeInput.value = this.timeString();
 		this.timeInput.disabled = !this.hasTime;
-
-		this.timeToggle.addEventListener("change", () => {
-			this.setHasTime(this.timeToggle.checked);
-			if (this.hasTime) this.syncTimeFromInput();
-		});
+		this.timeToggle.addEventListener("change", () =>
+			this.setHasTime(this.timeToggle.checked)
+		);
 		this.timeInput.addEventListener("input", () => {
 			this.syncTimeFromInput();
 			this.updatePreview();
 		});
 
+		// Time format menu (Hidden collapses to no time).
+		this.timeMenu = this.addMenuRow(
+			"Time format",
+			() => (this.hasTime ? (this.timeFormat === "24" ? "24 hour" : "12 hour") : "Hidden"),
+			[
+				{ value: "hidden", label: "Hidden" },
+				{ value: "12", label: "12 hour" },
+				{ value: "24", label: "24 hour" },
+			],
+			() => (this.hasTime ? this.timeFormat : "hidden"),
+			(v) => {
+				if (v === "hidden") {
+					this.setHasTime(false);
+				} else {
+					this.timeFormat = v as TimeFormat;
+					this.setHasTime(true);
+				}
+			}
+		);
+
+		// Timezone menu.
+		this.tzMenu = this.addMenuRow(
+			"Timezone",
+			() => tzMenuLabel(this.tz),
+			[
+				{ value: "local", label: "Local" },
+				...COMMON_TIMEZONES.map((z) => ({ value: z, label: tzMenuLabel(z) })),
+			],
+			() => this.tz ?? "local",
+			(v) => {
+				this.tz = v === "local" ? null : v;
+				this.refreshMenus();
+				this.updatePreview();
+			}
+		);
+
+		// Footer: Clear (left) + Insert/Update (right).
 		const footer = this.root.createDiv({ cls: "now-dp-footer" });
+		const clearBtn = footer.createEl("button", {
+			cls: "now-dp-action now-dp-clear",
+			text: "Clear",
+		});
+		clearBtn.addEventListener("click", () => this.clear());
+		footer.createDiv({ cls: "now-dp-footer-spacer" });
 		const submitBtn = footer.createEl("button", {
 			cls: "now-dp-action mod-cta",
 			text: this.mode === "edit" ? "Update" : "Insert",
@@ -263,10 +311,65 @@ export class DatePicker {
 		submitBtn.addEventListener("click", () => this.submit());
 	}
 
-	private toggleFormatList(force?: boolean): void {
-		this.formatListOpen = force ?? !this.formatListOpen;
-		this.formatList.style.display = this.formatListOpen ? "block" : "none";
-		this.reposition(this.anchor);
+	// Builds a "label ... value >" row with a collapsible option list beneath it.
+	private addMenuRow(
+		labelText: string,
+		valueText: () => string,
+		options: MenuOption[],
+		current: () => string,
+		onSelect: (value: string) => void
+	): MenuHandle {
+		const row = this.root.createDiv({ cls: "now-dp-row now-dp-menu-row" });
+		row.createSpan({ cls: "now-dp-row-label", text: labelText });
+		const valueEl = row.createSpan({ cls: "now-dp-row-value", text: valueText() });
+		row.createSpan({ cls: "now-dp-row-chevron", text: ">" });
+
+		const list = this.root.createDiv({ cls: "now-dp-menu-list" });
+		list.style.display = "none";
+		const items: HTMLElement[] = [];
+		const applyCurrent = () => {
+			const cur = current();
+			options.forEach((opt, i) => {
+				items[i].toggleClass("now-dp-menu-current", opt.value === cur);
+			});
+		};
+		options.forEach((opt) => {
+			const item = list.createDiv({ cls: "now-dp-menu-item", text: opt.label });
+			items.push(item);
+			item.addEventListener("click", () => {
+				onSelect(opt.value);
+				list.style.display = "none";
+				applyCurrent();
+				this.reposition(this.anchor);
+			});
+		});
+		applyCurrent();
+
+		row.addEventListener("click", (e) => {
+			if (list.contains(e.target as Node)) return;
+			const open = list.style.display === "none";
+			// Collapse any other open menus for a tidy single-open behaviour.
+			this.root.findAll(".now-dp-menu-list").forEach((el) => {
+				(el as HTMLElement).style.display = "none";
+			});
+			list.style.display = open ? "block" : "none";
+			applyCurrent();
+			this.reposition(this.anchor);
+		});
+
+		return { valueEl, refresh: () => valueEl.setText(valueText()) };
+	}
+
+	private refreshMenus(): void {
+		this.fmtMenu.refresh();
+		this.timeMenu.refresh();
+		this.tzMenu.refresh();
+	}
+
+	private clear(): void {
+		this.submitted = true;
+		this.close(false);
+		this.onClear();
 	}
 
 	private timeString(): string {
@@ -310,10 +413,7 @@ export class DatePicker {
 		}
 		for (let day = 1; day <= daysInMonth; day++) {
 			const cellDate = new Date(year, month, day);
-			const cell = this.gridEl.createDiv({
-				cls: "now-dp-day",
-				text: String(day),
-			});
+			const cell = this.gridEl.createDiv({ cls: "now-dp-day", text: String(day) });
 			if (isSameDay(cellDate, today)) cell.addClass("now-dp-today");
 			if (isSameDay(cellDate, this.selected)) cell.addClass("now-dp-selected");
 			cell.addEventListener("click", () => {
@@ -329,7 +429,11 @@ export class DatePicker {
 			return;
 		}
 		this.previewEl.setText(
-			formatDisplay(this.selected, this.hasTime, this.format)
+			formatPill(this.selected, this.hasTime, {
+				format: this.format,
+				timeFormat: this.timeFormat,
+				tz: this.tz,
+			})
 		);
 	}
 

@@ -8,7 +8,7 @@ import {
 	ViewUpdate,
 	WidgetType,
 } from "@codemirror/view";
-import { dateTokenRegexGlobal, formatDisplay, parseToken } from "./dateUtils";
+import { TimeFormat, dateTokenRegexGlobal, formatPill, parseToken } from "./dateUtils";
 
 // The plugin implements these; kept as an interface to avoid a circular import.
 export interface PickerHost {
@@ -21,6 +21,8 @@ export interface PickerHost {
 	navigateSession(deltaDays: number): boolean;
 	// Editing an existing pill.
 	openPickerForEdit(view: EditorView, from: number, to: number): void;
+	// Fallback time format for tokens that predate the ~t12/~t24 suffix.
+	getDefaultTimeFormat(): TimeFormat;
 }
 
 // Given a document position, returns the bounds of the @date token under it.
@@ -124,11 +126,11 @@ function pillExtension(host: PickerHost): Extension {
 				const end = start + m[0].length;
 				const parsed = parseToken(m[0]);
 				if (!parsed) continue;
-				const display = formatDisplay(
-					parsed.date,
-					parsed.hasTime,
-					parsed.format
-				);
+				const display = formatPill(parsed.date, parsed.hasTime, {
+					format: parsed.format,
+					timeFormat: parsed.timeFormat ?? host.getDefaultTimeFormat(),
+					tz: parsed.tz,
+				});
 				builder.add(
 					start,
 					end,

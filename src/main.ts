@@ -6,8 +6,9 @@ import {
 	DateFormat,
 	DATE_FORMAT_LABELS,
 	DATE_FORMAT_ORDER,
+	TimeFormat,
 	dateTokenRegexGlobal,
-	formatDisplay,
+	formatPill,
 	formatToken,
 	parseNaturalDate,
 	parseToken,
@@ -18,10 +19,13 @@ interface NowSettings {
 	// format). Typed relative expressions still become "rel"; typed absolute
 	// dates keep their absolute style.
 	defaultFormat: DateFormat;
+	// Time format applied to new timed dates.
+	defaultTimeFormat: TimeFormat;
 }
 
 const DEFAULT_SETTINGS: NowSettings = {
 	defaultFormat: "rel",
+	defaultTimeFormat: "12",
 };
 
 export default class NowPlugin extends Plugin implements PickerHost {
@@ -66,8 +70,11 @@ export default class NowPlugin extends Plugin implements PickerHost {
 			initialDate: new Date(),
 			initialHasTime: false,
 			initialFormat: this.settings.defaultFormat,
+			initialTimeFormat: this.settings.defaultTimeFormat,
+			initialTz: null,
 			mode: "new",
 			onSubmit: (value) => this.commitSessionValue(value),
+			onClear: () => this.clearSession(),
 			onCancel: () => {
 				this.session = null;
 				this.activePicker = null;
@@ -111,6 +118,10 @@ export default class NowPlugin extends Plugin implements PickerHost {
 		return !!(this.session && this.activePicker);
 	}
 
+	getDefaultTimeFormat(): TimeFormat {
+		return this.settings.defaultTimeFormat;
+	}
+
 	commitSession(): boolean {
 		if (!this.session || !this.activePicker) return false;
 		this.activePicker.submit();
@@ -138,10 +149,29 @@ export default class NowPlugin extends Plugin implements PickerHost {
 		this.activePicker = null;
 		const head = view.state.selection.main.head;
 		const to = Math.max(anchor + 1, head);
-		const token = formatToken(value.date, value.hasTime, value.format);
+		const token = formatToken(value.date, value.hasTime, {
+			format: value.format,
+			timeFormat: value.timeFormat,
+			tz: value.tz,
+		});
 		view.dispatch({
 			changes: { from: anchor, to, insert: token },
 			selection: { anchor: anchor + token.length },
+		});
+		view.focus();
+	}
+
+	// Clear during typing: remove the "@" and anything typed after it.
+	private clearSession(): void {
+		if (!this.session) return;
+		const { view, anchor } = this.session;
+		this.session = null;
+		this.activePicker = null;
+		const head = view.state.selection.main.head;
+		const to = Math.max(anchor + 1, head);
+		view.dispatch({
+			changes: { from: anchor, to, insert: "" },
+			selection: { anchor },
 		});
 		view.focus();
 	}
@@ -166,14 +196,32 @@ export default class NowPlugin extends Plugin implements PickerHost {
 			initialDate: parsed ? parsed.date : new Date(),
 			initialHasTime: parsed ? parsed.hasTime : false,
 			initialFormat: parsed ? parsed.format : this.settings.defaultFormat,
+			initialTimeFormat:
+				parsed && parsed.timeFormat
+					? parsed.timeFormat
+					: this.settings.defaultTimeFormat,
+			initialTz: parsed ? parsed.tz : null,
 			mode: "edit",
 			onSubmit: (value) => {
 				this.activePicker = null;
 				const current = dateTokenAt(view, from) ?? { from, to };
-				const token = formatToken(value.date, value.hasTime, value.format);
+				const token = formatToken(value.date, value.hasTime, {
+					format: value.format,
+					timeFormat: value.timeFormat,
+					tz: value.tz,
+				});
 				view.dispatch({
 					changes: { from: current.from, to: current.to, insert: token },
 					selection: { anchor: current.from + token.length },
+				});
+				view.focus();
+			},
+			onClear: () => {
+				this.activePicker = null;
+				const current = dateTokenAt(view, from) ?? { from, to };
+				view.dispatch({
+					changes: { from: current.from, to: current.to, insert: "" },
+					selection: { anchor: current.from },
 				});
 				view.focus();
 			},
@@ -213,7 +261,11 @@ export default class NowPlugin extends Plugin implements PickerHost {
 				span.className = "now-date-pill";
 				const parsed = parseToken(m[0]);
 				span.textContent = parsed
-					? formatDisplay(parsed.date, parsed.hasTime, parsed.format)
+					? formatPill(parsed.date, parsed.hasTime, {
+							format: parsed.format,
+							timeFormat: parsed.timeFormat ?? this.settings.defaultTimeFormat,
+							tz: parsed.tz,
+					  })
 					: m[0];
 				frag.appendChild(span);
 				last = m.index + m[0].length;
@@ -249,6 +301,19 @@ class NowSettingTab extends PluginSettingTab {
 				dd.setValue(this.plugin.settings.defaultFormat);
 				dd.onChange(async (value) => {
 					this.plugin.settings.defaultFormat = value as DateFormat;
+					await this.plugin.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Default time format")
+			.setDesc("Clock format applied to new dates that include a time.")
+			.addDropdown((dd) => {
+				dd.addOption("12", "12 hour");
+				dd.addOption("24", "24 hour");
+				dd.setValue(this.plugin.settings.defaultTimeFormat);
+				dd.onChange(async (value) => {
+					this.plugin.settings.defaultTimeFormat = value as TimeFormat;
 					await this.plugin.saveSettings();
 				});
 			});

@@ -3,6 +3,7 @@ import { DateTime } from "luxon";
 import {
 	dateTokenRegexGlobal,
 	parseToken,
+	reminderOffset,
 	ReminderCode,
 	REMINDER_LABELS,
 } from "obsidian-now-datecore";
@@ -44,39 +45,19 @@ function computeFire(
 	reminder: ReminderCode,
 	defaultZone: string | null
 ): DateTime | null {
+	const off = reminderOffset(reminder);
+	if (!off) return null;
 	const zone = tz ?? defaultZone ?? undefined;
 	const base = DateTime.fromObject(
 		{ year, month, day, hour: hasTime ? hour : 0, minute: hasTime ? minute : 0 },
 		zone ? { zone } : {}
 	);
 	if (!base.isValid) return null;
-	const at9 = (dt: DateTime) => dt.set({ hour: 9, minute: 0, second: 0, millisecond: 0 });
-	switch (reminder) {
-		case "at":
-			return hasTime ? base : null;
-		case "m5":
-			return hasTime ? base.minus({ minutes: 5 }) : null;
-		case "m10":
-			return hasTime ? base.minus({ minutes: 10 }) : null;
-		case "m15":
-			return hasTime ? base.minus({ minutes: 15 }) : null;
-		case "m30":
-			return hasTime ? base.minus({ minutes: 30 }) : null;
-		case "h1":
-			return hasTime ? base.minus({ hours: 1 }) : null;
-		case "h2":
-			return hasTime ? base.minus({ hours: 2 }) : null;
-		case "day":
-			return at9(base);
-		case "d1":
-			return at9(base.minus({ days: 1 }));
-		case "d2":
-			return at9(base.minus({ days: 2 }));
-		case "w1":
-			return at9(base.minus({ days: 7 }));
-		default:
-			return null; // "none"
-	}
+	if (off.kind === "at") return hasTime ? base : null;
+	if (off.kind === "minutes") return hasTime ? base.minus({ minutes: off.minutes }) : null;
+	return base
+		.minus({ days: off.days })
+		.set({ hour: off.atHour, minute: 0, second: 0, millisecond: 0 });
 }
 
 function humanEvent(

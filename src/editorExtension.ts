@@ -9,7 +9,25 @@ import {
 	WidgetType,
 } from "@codemirror/view";
 import { setIcon } from "obsidian";
-import { TimeFormat, dateTokenRegexGlobal, formatPill, parseToken } from "./dateUtils";
+import {
+	ParsedDate,
+	TimeFormat,
+	dateTokenRegexGlobal,
+	formatPill,
+	parseToken,
+	reminderFireLocal,
+} from "./dateUtils";
+
+export type ReminderPillState = "none" | "past" | "future";
+
+// Whether a token's reminder has already fired ("past") or is still upcoming
+// ("future"), for colouring the pill. Uses local time (see reminderFireLocal).
+export function reminderPillState(parsed: ParsedDate): ReminderPillState {
+	if (parsed.reminder === "none") return "none";
+	const fire = reminderFireLocal(parsed);
+	if (!fire) return "future";
+	return fire.getTime() <= Date.now() ? "past" : "future";
+}
 
 // Adds an alarm-clock suffix icon to a pill that carries a reminder, Notion-style.
 export function appendReminderIcon(el: HTMLElement): void {
@@ -52,22 +70,22 @@ export function dateTokenAt(
 class DatePillWidget extends WidgetType {
 	constructor(
 		readonly display: string,
-		readonly hasReminder: boolean,
+		readonly reminder: ReminderPillState,
 		readonly host: PickerHost
 	) {
 		super();
 	}
 
 	eq(other: DatePillWidget): boolean {
-		return other.display === this.display && other.hasReminder === this.hasReminder;
+		return other.display === this.display && other.reminder === this.reminder;
 	}
 
 	toDOM(view: EditorView): HTMLElement {
 		const span = document.createElement("span");
 		span.className = "now-date-pill";
 		span.appendChild(document.createTextNode(this.display));
-		if (this.hasReminder) {
-			span.classList.add("now-date-pill-reminder");
+		if (this.reminder !== "none") {
+			span.classList.add(`now-date-pill-reminder-${this.reminder}`);
 			appendReminderIcon(span);
 		}
 		span.addEventListener("mousedown", (e) => {
@@ -147,7 +165,7 @@ function pillExtension(host: PickerHost): Extension {
 					start,
 					end,
 					Decoration.replace({
-						widget: new DatePillWidget(display, parsed.reminder !== "none", host),
+						widget: new DatePillWidget(display, reminderPillState(parsed), host),
 					})
 				);
 			}

@@ -432,3 +432,63 @@ export function parseNaturalDate(input: string): NLResult | null {
 
 	return null;
 }
+
+// ---------------------------------------------------------------------------
+// Reminder fire-time. The offset semantics are shared here so the plugin (for
+// pill colouring) and the daemon (for scheduling) agree; the daemon applies
+// them with timezone precision, the plugin uses local time for display.
+// ---------------------------------------------------------------------------
+
+export type ReminderOffset =
+	| { kind: "at" }
+	| { kind: "minutes"; minutes: number }
+	| { kind: "days"; days: number; atHour: number };
+
+export function reminderOffset(code: ReminderCode): ReminderOffset | null {
+	switch (code) {
+		case "at":
+			return { kind: "at" };
+		case "m5":
+			return { kind: "minutes", minutes: 5 };
+		case "m10":
+			return { kind: "minutes", minutes: 10 };
+		case "m15":
+			return { kind: "minutes", minutes: 15 };
+		case "m30":
+			return { kind: "minutes", minutes: 30 };
+		case "h1":
+			return { kind: "minutes", minutes: 60 };
+		case "h2":
+			return { kind: "minutes", minutes: 120 };
+		case "day":
+			return { kind: "days", days: 0, atHour: 9 };
+		case "d1":
+			return { kind: "days", days: 1, atHour: 9 };
+		case "d2":
+			return { kind: "days", days: 2, atHour: 9 };
+		case "w1":
+			return { kind: "days", days: 7, atHour: 9 };
+		default:
+			return null; // "none"
+	}
+}
+
+// The reminder's fire time computed in LOCAL time (ignores the token's tz).
+// Good enough for display decisions (past vs future); the daemon computes the
+// exact, timezone-aware instant separately.
+export function reminderFireLocal(parsed: ParsedDate): Date | null {
+	const off = reminderOffset(parsed.reminder);
+	if (!off) return null;
+	if (off.kind === "at") {
+		return parsed.hasTime ? new Date(parsed.date.getTime()) : null;
+	}
+	if (off.kind === "minutes") {
+		return parsed.hasTime
+			? new Date(parsed.date.getTime() - off.minutes * 60000)
+			: null;
+	}
+	const d = new Date(parsed.date.getTime());
+	d.setDate(d.getDate() - off.days);
+	d.setHours(off.atHour, 0, 0, 0);
+	return d;
+}

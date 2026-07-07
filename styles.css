@@ -16,25 +16,31 @@
 	color: var(--text-on-accent, var(--text-normal));
 }
 
-/* A date carrying a reminder: distinct colour + alarm-clock suffix icon. */
-.now-date-pill-reminder {
-	color: var(--color-orange, #e0813a);
+/* A date carrying a reminder: colour by whether it has fired, + a small
+   alarm-clock suffix icon. Red = already passed, light blue = still upcoming. */
+.now-date-pill-reminder-past {
+	color: var(--color-red, #e5534b);
 }
 
-.now-date-pill-reminder:hover {
+.now-date-pill-reminder-future {
+	color: var(--color-blue, #6c9ff0);
+}
+
+.now-date-pill-reminder-past:hover,
+.now-date-pill-reminder-future:hover {
 	color: var(--text-on-accent, var(--text-normal));
 }
 
 .now-date-reminder-icon {
-	display: inline-flex;
-	align-items: center;
-	margin-left: 3px;
-	vertical-align: text-bottom;
+	margin-left: 4px;
 }
 
-.now-date-reminder-icon .svg-icon {
-	width: 0.85em;
-	height: 0.85em;
+/* Size + baseline-align the injected lucide SVG so it sits with the text. */
+.now-date-reminder-icon svg {
+	width: 0.9em;
+	height: 0.9em;
+	vertical-align: -0.14em;
+	stroke-width: 2;
 }
 
 /* ---- Floating date picker ---- */

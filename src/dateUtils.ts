@@ -29,6 +29,51 @@ export interface DisplayOpts {
 	tz: string | null; // IANA name, or null for local (no label)
 }
 
+// Reminder offsets. "none" is the absence of a reminder (never stored).
+// Timed offsets (at/m*/h*) require a time on the date; the day-based ones
+// (day/d1/d2/w1) fire at 09:00 and apply to any date. This mirrors Notion.
+export type ReminderCode =
+	| "none"
+	| "at"
+	| "m5"
+	| "m10"
+	| "m15"
+	| "m30"
+	| "h1"
+	| "h2"
+	| "day"
+	| "d1"
+	| "d2"
+	| "w1";
+
+export const REMINDER_LABELS: Record<ReminderCode, string> = {
+	none: "None",
+	at: "At time of event",
+	m5: "5 minutes before",
+	m10: "10 minutes before",
+	m15: "15 minutes before",
+	m30: "30 minutes before",
+	h1: "1 hour before",
+	h2: "2 hours before",
+	day: "On day of event (9:00 AM)",
+	d1: "1 day before (9:00 AM)",
+	d2: "2 days before (9:00 AM)",
+	w1: "1 week before (9:00 AM)",
+};
+
+const REMINDERS_DATEONLY: ReminderCode[] = ["none", "day", "d1", "d2", "w1"];
+const REMINDERS_TIMED: ReminderCode[] = [
+	"none", "at", "m5", "m10", "m15", "m30", "h1", "h2", "d1", "d2",
+];
+
+export function reminderOptionsFor(hasTime: boolean): ReminderCode[] {
+	return hasTime ? REMINDERS_TIMED : REMINDERS_DATEONLY;
+}
+
+export function isValidReminder(code: ReminderCode, hasTime: boolean): boolean {
+	return reminderOptionsFor(hasTime).includes(code);
+}
+
 export const DATE_FORMAT_ORDER: DateFormat[] = [
 	"rel",
 	"full",
@@ -70,7 +115,7 @@ export const COMMON_TIMEZONES = [
 
 // @YYYY-MM-DD [ HH:mm] [~segments]
 export const DATE_TOKEN_REGEX =
-	/@(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?((?:~(?:rel|full|short|mdy|dmy|ymd|t12|t24|z=[A-Za-z0-9_+\/-]+))*)/;
+	/@(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?((?:~(?:rel|full|short|mdy|dmy|ymd|t12|t24|z=[A-Za-z0-9_+\/-]+|r=(?:at|m5|m10|m15|m30|h1|h2|day|d1|d2|w1)))*)/;
 
 export function dateTokenRegexGlobal(): RegExp {
 	return new RegExp(DATE_TOKEN_REGEX.source, "g");
@@ -98,6 +143,7 @@ export interface ParsedDate {
 	format: DateFormat;
 	timeFormat: TimeFormat | null; // null -> caller falls back to a default
 	tz: string | null;
+	reminder: ReminderCode;
 }
 
 function pad(n: number): string {
@@ -130,13 +176,15 @@ function isoDate(d: Date): string {
 export function formatToken(
 	date: Date,
 	hasTime: boolean,
-	opts: DisplayOpts
+	opts: DisplayOpts,
+	reminder: ReminderCode = "none"
 ): string {
 	let s = "@" + isoDate(date);
 	if (hasTime) s += ` ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 	if (opts.format !== "iso") s += "~" + opts.format;
 	if (hasTime) s += opts.timeFormat === "24" ? "~t24" : "~t12";
 	if (hasTime && opts.tz) s += "~z=" + opts.tz;
+	if (reminder !== "none") s += "~r=" + reminder;
 	return s;
 }
 
@@ -158,13 +206,15 @@ export function parseToken(token: string): ParsedDate | null {
 	let format: DateFormat = "iso";
 	let timeFormat: TimeFormat | null = null;
 	let tz: string | null = null;
+	let reminder: ReminderCode = "none";
 	for (const seg of (m[6] || "").split("~").filter(Boolean)) {
 		if (FORMAT_CODES.has(seg)) format = seg as DateFormat;
 		else if (seg === "t12") timeFormat = "12";
 		else if (seg === "t24") timeFormat = "24";
 		else if (seg.startsWith("z=")) tz = seg.slice(2);
+		else if (seg.startsWith("r=")) reminder = seg.slice(2) as ReminderCode;
 	}
-	return { date, hasTime, format, timeFormat, tz };
+	return { date, hasTime, format, timeFormat, tz, reminder };
 }
 
 function relativeLabel(date: Date): string {

@@ -4,10 +4,14 @@ import {
 	DATE_FORMAT_LABELS,
 	DATE_FORMAT_ORDER,
 	MONTH_NAMES_FULL,
+	REMINDER_LABELS,
+	ReminderCode,
 	TimeFormat,
 	WEEKDAY_HEADERS,
 	formatPill,
 	isSameDay,
+	isValidReminder,
+	reminderOptionsFor,
 	tzMenuLabel,
 } from "./dateUtils";
 
@@ -17,6 +21,7 @@ export interface PickerValue {
 	format: DateFormat;
 	timeFormat: TimeFormat;
 	tz: string | null;
+	reminder: ReminderCode;
 }
 
 export interface DatePickerOptions {
@@ -26,6 +31,7 @@ export interface DatePickerOptions {
 	initialFormat: DateFormat;
 	initialTimeFormat: TimeFormat;
 	initialTz: string | null;
+	initialReminder: ReminderCode;
 	// "new" is used while typing inline (editor keeps focus, plugin drives keys);
 	// "edit" is used when a pill is clicked (picker handles its own keys).
 	mode: "new" | "edit";
@@ -57,6 +63,7 @@ export class DatePicker {
 	private fmtMenu!: MenuHandle;
 	private timeMenu!: MenuHandle;
 	private tzMenu!: MenuHandle;
+	private remindMenu!: MenuHandle;
 
 	private viewDate: Date;
 	private selected: Date;
@@ -64,6 +71,7 @@ export class DatePicker {
 	private format: DateFormat;
 	private timeFormat: TimeFormat;
 	private tz: string | null;
+	private reminder: ReminderCode;
 	private readonly mode: "new" | "edit";
 	private submitted = false;
 
@@ -119,6 +127,7 @@ export class DatePicker {
 		this.format = opts.initialFormat;
 		this.timeFormat = opts.initialTimeFormat;
 		this.tz = opts.initialTz;
+		this.reminder = opts.initialReminder;
 		this.mode = opts.mode;
 		this.onSubmit = opts.onSubmit;
 		this.onClear = opts.onClear;
@@ -151,6 +160,7 @@ export class DatePicker {
 			format: this.format,
 			timeFormat: this.timeFormat,
 			tz: this.tz,
+			reminder: this.reminder,
 		};
 	}
 
@@ -172,6 +182,8 @@ export class DatePicker {
 		this.timeToggle.checked = hasTime;
 		this.timeInput.disabled = !hasTime;
 		if (hasTime) this.timeInput.value = this.timeString();
+		// Some reminders only make sense with/without a time; drop if invalid.
+		if (!isValidReminder(this.reminder, hasTime)) this.reminder = "none";
 		this.refreshMenus();
 		this.updatePreview();
 	}
@@ -235,7 +247,7 @@ export class DatePicker {
 		this.fmtMenu = this.addMenuRow(
 			"Date format",
 			() => DATE_FORMAT_LABELS[this.format],
-			DATE_FORMAT_ORDER.map((f) => ({ value: f, label: DATE_FORMAT_LABELS[f] })),
+			() => DATE_FORMAT_ORDER.map((f) => ({ value: f, label: DATE_FORMAT_LABELS[f] })),
 			() => this.format,
 			(v) => this.setFormat(v as DateFormat)
 		);
@@ -264,7 +276,7 @@ export class DatePicker {
 		this.timeMenu = this.addMenuRow(
 			"Time format",
 			() => (this.hasTime ? (this.timeFormat === "24" ? "24 hour" : "12 hour") : "Hidden"),
-			[
+			() => [
 				{ value: "hidden", label: "Hidden" },
 				{ value: "12", label: "12 hour" },
 				{ value: "24", label: "24 hour" },
@@ -284,7 +296,7 @@ export class DatePicker {
 		this.tzMenu = this.addMenuRow(
 			"Timezone",
 			() => tzMenuLabel(this.tz),
-			[
+			() => [
 				{ value: "local", label: "Local" },
 				...COMMON_TIMEZONES.map((z) => ({ value: z, label: tzMenuLabel(z) })),
 			],
@@ -293,6 +305,22 @@ export class DatePicker {
 				this.tz = v === "local" ? null : v;
 				this.refreshMenus();
 				this.updatePreview();
+			}
+		);
+
+		// Remind menu (options depend on whether a time is included).
+		this.remindMenu = this.addMenuRow(
+			"Remind",
+			() => REMINDER_LABELS[this.reminder],
+			() =>
+				reminderOptionsFor(this.hasTime).map((code) => ({
+					value: code,
+					label: REMINDER_LABELS[code],
+				})),
+			() => this.reminder,
+			(v) => {
+				this.reminder = v as ReminderCode;
+				this.refreshMenus();
 			}
 		);
 
@@ -312,10 +340,11 @@ export class DatePicker {
 	}
 
 	// Builds a "label ... value >" row with a collapsible option list beneath it.
+	// `options` is a function so menus (like Remind) can vary with other state.
 	private addMenuRow(
 		labelText: string,
 		valueText: () => string,
-		options: MenuOption[],
+		options: () => MenuOption[],
 		current: () => string,
 		onSelect: (value: string) => void
 	): MenuHandle {
@@ -326,24 +355,20 @@ export class DatePicker {
 
 		const list = this.root.createDiv({ cls: "now-dp-menu-list" });
 		list.style.display = "none";
-		const items: HTMLElement[] = [];
-		const applyCurrent = () => {
+
+		const rebuild = () => {
+			list.empty();
 			const cur = current();
-			options.forEach((opt, i) => {
-				items[i].toggleClass("now-dp-menu-current", opt.value === cur);
-			});
+			for (const opt of options()) {
+				const item = list.createDiv({ cls: "now-dp-menu-item", text: opt.label });
+				item.toggleClass("now-dp-menu-current", opt.value === cur);
+				item.addEventListener("click", () => {
+					onSelect(opt.value);
+					list.style.display = "none";
+					this.reposition(this.anchor);
+				});
+			}
 		};
-		options.forEach((opt) => {
-			const item = list.createDiv({ cls: "now-dp-menu-item", text: opt.label });
-			items.push(item);
-			item.addEventListener("click", () => {
-				onSelect(opt.value);
-				list.style.display = "none";
-				applyCurrent();
-				this.reposition(this.anchor);
-			});
-		});
-		applyCurrent();
 
 		row.addEventListener("click", (e) => {
 			if (list.contains(e.target as Node)) return;
@@ -352,8 +377,8 @@ export class DatePicker {
 			this.root.findAll(".now-dp-menu-list").forEach((el) => {
 				(el as HTMLElement).style.display = "none";
 			});
+			if (open) rebuild();
 			list.style.display = open ? "block" : "none";
-			applyCurrent();
 			this.reposition(this.anchor);
 		});
 
@@ -364,6 +389,7 @@ export class DatePicker {
 		this.fmtMenu.refresh();
 		this.timeMenu.refresh();
 		this.tzMenu.refresh();
+		this.remindMenu.refresh();
 	}
 
 	private clear(): void {

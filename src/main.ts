@@ -72,6 +72,7 @@ export default class NowPlugin extends Plugin implements PickerHost {
 			initialFormat: this.settings.defaultFormat,
 			initialTimeFormat: this.settings.defaultTimeFormat,
 			initialTz: null,
+			initialReminder: "none",
 			mode: "new",
 			onSubmit: (value) => this.commitSessionValue(value),
 			onClear: () => this.clearSession(),
@@ -149,11 +150,12 @@ export default class NowPlugin extends Plugin implements PickerHost {
 		this.activePicker = null;
 		const head = view.state.selection.main.head;
 		const to = Math.max(anchor + 1, head);
-		const token = formatToken(value.date, value.hasTime, {
-			format: value.format,
-			timeFormat: value.timeFormat,
-			tz: value.tz,
-		});
+		const token = formatToken(
+			value.date,
+			value.hasTime,
+			{ format: value.format, timeFormat: value.timeFormat, tz: value.tz },
+			value.reminder
+		);
 		view.dispatch({
 			changes: { from: anchor, to, insert: token },
 			selection: { anchor: anchor + token.length },
@@ -201,15 +203,17 @@ export default class NowPlugin extends Plugin implements PickerHost {
 					? parsed.timeFormat
 					: this.settings.defaultTimeFormat,
 			initialTz: parsed ? parsed.tz : null,
+			initialReminder: parsed ? parsed.reminder : "none",
 			mode: "edit",
 			onSubmit: (value) => {
 				this.activePicker = null;
 				const current = dateTokenAt(view, from) ?? { from, to };
-				const token = formatToken(value.date, value.hasTime, {
-					format: value.format,
-					timeFormat: value.timeFormat,
-					tz: value.tz,
-				});
+				const token = formatToken(
+					value.date,
+					value.hasTime,
+					{ format: value.format, timeFormat: value.timeFormat, tz: value.tz },
+					value.reminder
+				);
 				view.dispatch({
 					changes: { from: current.from, to: current.to, insert: token },
 					selection: { anchor: current.from + token.length },

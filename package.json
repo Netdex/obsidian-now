@@ -1,0 +1,27 @@
+{
+	"name": "obsidian-now",
+	"version": "1.0.0",
+	"description": "Type @ to open a date picker and insert an inline date, Notion-style.",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+	},
+	"keywords": [
+		"obsidian",
+		"plugin",
+		"date",
+		"datepicker"
+	],
+	"author": "netdex",
+	"license": "MIT",
+	"devDependencies": {
+		"@codemirror/state": "6.5.0",
+		"@codemirror/view": "^6.36.0",
+		"@types/node": "^20.11.30",
+		"builtin-modules": "^3.3.0",
+		"esbuild": "0.20.2",
+		"obsidian": "latest",
+		"typescript": "^5.4.3"
+	}
+}

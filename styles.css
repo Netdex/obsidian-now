@@ -1,0 +1,139 @@
+/* ---- Inline date pill (edit + reading view) ---- */
+.now-date-pill {
+	background-color: var(--text-selection, rgba(120, 120, 255, 0.2));
+	color: var(--text-accent, inherit);
+	border-radius: 4px;
+	padding: 0 4px;
+	cursor: pointer;
+	white-space: nowrap;
+	box-decoration-break: clone;
+	-webkit-box-decoration-break: clone;
+	transition: background-color 0.1s ease;
+}
+
+.now-date-pill:hover {
+	background-color: var(--text-accent, rgba(120, 120, 255, 0.35));
+	color: var(--text-on-accent, var(--text-normal));
+}
+
+/* ---- Floating date picker ---- */
+.now-datepicker {
+	position: fixed;
+	z-index: var(--layer-menu, 100);
+	width: 260px;
+	padding: 10px;
+	background-color: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	box-shadow: var(--shadow-s, 0 4px 16px rgba(0, 0, 0, 0.3));
+	font-size: var(--font-ui-small, 13px);
+	color: var(--text-normal);
+	user-select: none;
+}
+
+.now-dp-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 8px;
+}
+
+.now-dp-title {
+	font-weight: 600;
+}
+
+.now-dp-nav {
+	background: transparent;
+	border: none;
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: 18px;
+	line-height: 1;
+	padding: 2px 8px;
+	border-radius: 4px;
+	box-shadow: none;
+}
+
+.now-dp-nav:hover {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.now-dp-weekdays,
+.now-dp-grid {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 2px;
+}
+
+.now-dp-weekday {
+	text-align: center;
+	font-size: 11px;
+	color: var(--text-muted);
+	padding: 2px 0;
+}
+
+.now-dp-day {
+	text-align: center;
+	padding: 5px 0;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.now-dp-empty {
+	cursor: default;
+}
+
+.now-dp-day:not(.now-dp-empty):hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.now-dp-today {
+	font-weight: 700;
+	color: var(--text-accent);
+}
+
+.now-dp-selected {
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.now-dp-selected:hover {
+	background-color: var(--interactive-accent-hover);
+}
+
+.now-dp-time {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-top: 10px;
+	padding-top: 8px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.now-dp-time-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+}
+
+.now-dp-time-input {
+	width: auto;
+}
+
+.now-dp-time-input:disabled {
+	opacity: 0.5;
+}
+
+.now-dp-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+	margin-top: 10px;
+}
+
+.now-dp-action {
+	cursor: pointer;
+}

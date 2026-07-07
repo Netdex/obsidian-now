@@ -8,7 +8,14 @@ import {
 	ViewUpdate,
 	WidgetType,
 } from "@codemirror/view";
+import { setIcon } from "obsidian";
 import { TimeFormat, dateTokenRegexGlobal, formatPill, parseToken } from "./dateUtils";
+
+// Adds an alarm-clock suffix icon to a pill that carries a reminder, Notion-style.
+export function appendReminderIcon(el: HTMLElement): void {
+	const icon = el.createSpan({ cls: "now-date-reminder-icon" });
+	setIcon(icon, "alarm-clock");
+}
 
 // The plugin implements these; kept as an interface to avoid a circular import.
 export interface PickerHost {
@@ -45,19 +52,24 @@ export function dateTokenAt(
 class DatePillWidget extends WidgetType {
 	constructor(
 		readonly display: string,
+		readonly hasReminder: boolean,
 		readonly host: PickerHost
 	) {
 		super();
 	}
 
 	eq(other: DatePillWidget): boolean {
-		return other.display === this.display;
+		return other.display === this.display && other.hasReminder === this.hasReminder;
 	}
 
 	toDOM(view: EditorView): HTMLElement {
 		const span = document.createElement("span");
 		span.className = "now-date-pill";
-		span.textContent = this.display;
+		span.appendChild(document.createTextNode(this.display));
+		if (this.hasReminder) {
+			span.classList.add("now-date-pill-reminder");
+			appendReminderIcon(span);
+		}
 		span.addEventListener("mousedown", (e) => {
 			if (e.button !== 0) return;
 			e.preventDefault();
@@ -135,7 +147,7 @@ function pillExtension(host: PickerHost): Extension {
 					start,
 					end,
 					Decoration.replace({
-						widget: new DatePillWidget(display, host),
+						widget: new DatePillWidget(display, parsed.reminder !== "none", host),
 					})
 				);
 			}

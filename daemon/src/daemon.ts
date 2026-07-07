@@ -139,11 +139,16 @@ export class ReminderDaemon {
 			message,
 			timestamp: Math.floor(r.fireMillis / 1000),
 		};
-		if (this.cfg.obsidianVault) {
-			const file = r.filePath.replace(/\.md$/i, "");
-			n.url = `obsidian://open?vault=${encodeURIComponent(this.cfg.obsidianVault)}&file=${encodeURIComponent(file)}`;
-			n.urlTitle = "Open note";
-		}
+		// obsidian://open resolves the file via linkpath, so use the path without
+		// the .md extension and encode each segment while keeping the slashes
+		// literal (percent-encoded slashes are not resolved reliably).
+		const rel = r.filePath.replace(/\.md$/i, "");
+		const fileParam = rel.split("/").map(encodeURIComponent).join("/");
+		const vaultParam = this.cfg.obsidianVault
+			? `vault=${encodeURIComponent(this.cfg.obsidianVault)}&`
+			: "";
+		n.url = `obsidian://open?${vaultParam}file=${fileParam}`;
+		n.urlTitle = "Open note";
 		return n;
 	}
 

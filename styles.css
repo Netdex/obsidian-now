@@ -16,6 +16,27 @@
 	color: var(--text-on-accent, var(--text-normal));
 }
 
+/* A date carrying a reminder: distinct colour + alarm-clock suffix icon. */
+.now-date-pill-reminder {
+	color: var(--color-orange, #e0813a);
+}
+
+.now-date-pill-reminder:hover {
+	color: var(--text-on-accent, var(--text-normal));
+}
+
+.now-date-reminder-icon {
+	display: inline-flex;
+	align-items: center;
+	margin-left: 3px;
+	vertical-align: text-bottom;
+}
+
+.now-date-reminder-icon .svg-icon {
+	width: 0.85em;
+	height: 0.85em;
+}
+
 /* ---- Floating date picker ---- */
 .now-datepicker {
 	position: fixed;

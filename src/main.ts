@@ -1,7 +1,7 @@
 import { Plugin, PluginSettingTab, Setting } from "obsidian";
 import { EditorView } from "@codemirror/view";
 import { DatePicker, PickerValue } from "./datePicker";
-import { nowEditorExtensions, PickerHost, dateTokenAt } from "./editorExtension";
+import { nowEditorExtensions, PickerHost, dateTokenAt, appendReminderIcon } from "./editorExtension";
 import {
 	DateFormat,
 	DATE_FORMAT_LABELS,
@@ -264,13 +264,21 @@ export default class NowPlugin extends Plugin implements PickerHost {
 				const span = document.createElement("span");
 				span.className = "now-date-pill";
 				const parsed = parseToken(m[0]);
-				span.textContent = parsed
-					? formatPill(parsed.date, parsed.hasTime, {
-							format: parsed.format,
-							timeFormat: parsed.timeFormat ?? this.settings.defaultTimeFormat,
-							tz: parsed.tz,
-					  })
-					: m[0];
+				span.appendChild(
+					document.createTextNode(
+						parsed
+							? formatPill(parsed.date, parsed.hasTime, {
+									format: parsed.format,
+									timeFormat: parsed.timeFormat ?? this.settings.defaultTimeFormat,
+									tz: parsed.tz,
+							  })
+							: m[0]
+					)
+				);
+				if (parsed && parsed.reminder !== "none") {
+					span.classList.add("now-date-pill-reminder");
+					appendReminderIcon(span);
+				}
 				frag.appendChild(span);
 				last = m.index + m[0].length;
 			}

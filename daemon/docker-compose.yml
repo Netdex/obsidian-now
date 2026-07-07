@@ -11,7 +11,7 @@ name: obsidian-remind
 
 services:
   remind:
-    image: ghcr.io/netdex/obsidian-remind:main
+    image: ghcr.io/netdex/obsidian-now-remind:latest
     # To build locally instead of pulling, uncomment (context is the repo root
     # because the daemon depends on the datecore workspace):
     # build:

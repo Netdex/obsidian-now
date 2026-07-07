@@ -112,10 +112,10 @@ docker run -d --name obsidian-remind \
 ```
 
 **Docker Compose:** `docker-compose.yml` runs the prebuilt image
-(`ghcr.io/netdex/obsidian-remind:main`; swap to `build: .` to build locally).
-Edit `docker/config.json`, put secrets in `.env`, then `docker compose up -d`.
-The GHCR package is private by default, so `docker login ghcr.io` first or make
-it public.
+(`ghcr.io/netdex/obsidian-now-remind:latest`; uncomment the `build:` block to
+build locally from the repo root). Edit `docker/config.json`, put secrets in
+`.env`, then `docker compose up -d`. The GHCR package is private by default, so
+`docker login ghcr.io` first or make it public.
 
 ## Development
 

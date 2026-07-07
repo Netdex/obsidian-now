@@ -47,12 +47,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # Keep the daemon image name stable even though the repo is obsidian-now.
-          images: ghcr.io/${{ github.repository_owner }}/obsidian-remind
+          # Package owned by THIS repo (obsidian-now); the old obsidian-remind
+          # package belongs to the old repo and is not writable from here.
+          images: ghcr.io/${{ github.repository_owner }}/obsidian-now-remind
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
 
       # Build context is the repo root; the daemon Dockerfile pulls in the
       # datecore workspace. Builds on PRs, pushes on push events.

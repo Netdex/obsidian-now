@@ -48,6 +48,15 @@ async function main(): Promise<void> {
 	log.info(
 		`obsidian-remind starting (couch: ${cfg.couch.url}/${cfg.couch.database}, dryRun: ${cfg.dryRun})`
 	);
+	if (!cfg.timezone) {
+		const sysZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+		log.warn(
+			`config.timezone is not set; date-only reminders (e.g. "9:00 AM") will ` +
+				`use the process timezone (${sysZone}). In a container this is usually ` +
+				`UTC -- set config.timezone to your IANA zone (e.g. "America/New_York") ` +
+				`so those reminders fire at the intended local time.`
+		);
+	}
 
 	const state = new State(cfg.statePath);
 	state.load();

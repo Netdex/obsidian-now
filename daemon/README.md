@@ -71,7 +71,7 @@ cp daemon/.env.example daemon/.env                   # COUCHDB_PASSWORD + Pushov
 | `couch.database` | Database name (the LiveSync `couchDB_DBNAME`). |
 | `couch.username` / `couch.password` | CouchDB credentials. |
 | `statePath` | Where "already notified" state is stored (default `./state.json`). |
-| `timezone` | IANA zone for dates without an explicit `~z=` (default: system). |
+| `timezone` | IANA zone for dates without an explicit `~z=` (default: system). **Set this** -- in a container the system zone is usually UTC, so date-only "9:00 AM" reminders would fire at 9 AM UTC. |
 | `tickIntervalMs` | How often changes are polled + due reminders checked (default 30000). |
 | `missedGraceMs` | Reminders overdue by more than this are suppressed silently (default 24h). |
 | `obsidianVault` | Optional vault name; adds an `obsidian://` deep link to notifications. |
@@ -79,6 +79,12 @@ cp daemon/.env.example daemon/.env                   # COUCHDB_PASSWORD + Pushov
 
 Secrets can be supplied via environment (`.env` or the process env) and override
 the config file: `COUCHDB_PASSWORD`, `PUSHOVER_TOKEN`, `PUSHOVER_USER`.
+
+> **Timezone.** Date-only reminders (e.g. "On day of event (9:00 AM)") carry no
+> timezone, so they use `config.timezone` (or the process zone if unset). Running
+> in a UTC container without setting it makes "9:00 AM" fire at 9 AM UTC. Set
+> `"timezone": "America/New_York"` (or your zone) to fix it. Timed reminders that
+> carry a `~z=` zone are unaffected.
 
 ## Running
 

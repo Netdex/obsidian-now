@@ -19,10 +19,26 @@ and edit the date. Pills are highlighted in reading view as well.
 ## Usage
 
 - Type `@` -> the calendar pops up at the caret.
-- Click a day -> `@YYYY-MM-DD` is inserted (the typed `@` is replaced).
-- Toggle **Include time** and set a time -> `@YYYY-MM-DD HH:mm`.
-- **Enter** commits, **Escape** dismisses, clicking outside dismisses.
-- Click an existing highlighted date to re-open the picker and change it.
+- **Type a date in natural language** and press **Enter**: `@today`, `@tomorrow`,
+  `@in 3 days`, `@next friday`, `@jul 5`, `@2026-07-05`. Relative phrases display
+  relatively ("Today"); absolute dates display absolutely.
+- Or click a day in the calendar.
+- Toggle **Include time** to add a time.
+- **Enter** commits, **Escape** dismisses, arrow keys move the selection.
+- Click an existing pill to re-open the picker and change the date, time, or format.
+
+## Per-date format
+
+Each date carries its own display format, chosen in the picker's **Date format**
+menu (Relative, Full date, Short date, Month/Day/Year, Day/Month/Year,
+Year/Month/Day, ISO). The **default** for calendar picks is set in
+Settings -> Now - Date Picker (defaults to Relative).
+
+The underlying date is always stored canonically in the note, so a relative
+label like "Today" is recomputed on display and never goes stale. The stored
+text looks like `@2026-07-05` (absolute) or `@2026-07-05~rel` (relative); the
+`~code` suffix is hidden by the pill and only visible if the note is opened
+without this plugin.
 
 ## Development
 

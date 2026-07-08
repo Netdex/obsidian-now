@@ -43,21 +43,31 @@
 	stroke-width: 2;
 }
 
-/* A graph-linked date: small link glyph after the label. Click it (or
-   Ctrl/Cmd-click the pill) to open the date note. */
+/* A graph-linked date: a small, clearly-clickable link chip after the label
+   (and after the reminder icon, when present). The border + accent tint set it
+   apart from the passive alarm icon. */
 .now-date-link-icon {
-	margin-left: 4px;
-	opacity: 0.65;
+	display: inline-flex;
+	align-items: center;
+	margin-left: 5px;
+	padding: 0 3px;
+	border: 1px solid currentColor;
+	border-radius: 3px;
+	color: var(--text-accent);
+	opacity: 0.7;
+	cursor: pointer;
+	transition: opacity 0.1s ease, background-color 0.1s ease;
 }
 
-.now-date-pill-linked:hover .now-date-link-icon {
+.now-date-link-icon:hover {
 	opacity: 1;
+	background-color: var(--background-modifier-hover);
 }
 
 .now-date-link-icon svg {
 	width: 0.85em;
 	height: 0.85em;
-	vertical-align: -0.12em;
+	vertical-align: -0.1em;
 	stroke-width: 2;
 }
 

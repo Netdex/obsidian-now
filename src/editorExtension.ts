@@ -102,15 +102,16 @@ class DatePillWidget extends WidgetType {
 		const span = document.createElement("span");
 		span.className = "now-date-pill";
 		span.appendChild(document.createTextNode(this.display));
+		if (this.reminder !== "none") {
+			span.classList.add(`now-date-pill-reminder-${this.reminder}`);
+			appendReminderIcon(span);
+		}
+		// Link chip goes last, after any reminder icon.
 		let linkIcon: HTMLElement | null = null;
 		if (this.linked) {
 			span.classList.add("now-date-pill-linked");
 			span.setAttribute("aria-label", "Ctrl/Cmd-click to open the date note");
 			linkIcon = appendLinkIcon(span);
-		}
-		if (this.reminder !== "none") {
-			span.classList.add(`now-date-pill-reminder-${this.reminder}`);
-			appendReminderIcon(span);
 		}
 		span.addEventListener("mousedown", (e) => {
 			// Left (0) edits or navigates; middle (1) navigates to a new pane.

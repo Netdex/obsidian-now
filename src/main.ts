@@ -371,6 +371,12 @@ export default class NowPlugin extends Plugin implements PickerHost {
 				})
 			)
 		);
+		const rstate = reminderPillState(parsed);
+		if (rstate !== "none") {
+			span.classList.add(`now-date-pill-reminder-${rstate}`);
+			appendReminderIcon(span);
+		}
+		// Link chip goes last, after any reminder icon.
 		if (parsed.linked) {
 			const iso = isoDate(parsed.date);
 			span.classList.add("now-date-pill-linked");
@@ -384,11 +390,6 @@ export default class NowPlugin extends Plugin implements PickerHost {
 					e.metaKey || e.ctrlKey
 				);
 			});
-		}
-		const rstate = reminderPillState(parsed);
-		if (rstate !== "none") {
-			span.classList.add(`now-date-pill-reminder-${rstate}`);
-			appendReminderIcon(span);
 		}
 		return span;
 	}

@@ -1,13 +1,13 @@
 /* ---- Inline date pill (edit + reading view) ---- */
 .now-date-pill {
+	display: inline-flex;
+	align-items: center;
 	background-color: var(--text-selection, rgba(120, 120, 255, 0.2));
 	color: var(--text-accent, inherit);
 	border-radius: 4px;
 	padding: 0 4px;
 	cursor: pointer;
 	white-space: nowrap;
-	box-decoration-break: clone;
-	-webkit-box-decoration-break: clone;
 	transition: background-color 0.1s ease;
 }
 
@@ -35,40 +35,56 @@
 	margin-left: 4px;
 }
 
-/* Size + baseline-align the injected lucide SVG so it sits with the text. */
+/* Size the injected lucide SVG; the flex pill centres it vertically. */
+.now-date-reminder-icon {
+	display: inline-flex;
+	align-items: center;
+}
+
 .now-date-reminder-icon svg {
+	display: block;
 	width: 0.9em;
 	height: 0.9em;
-	vertical-align: -0.14em;
 	stroke-width: 2;
 }
 
-/* A graph-linked date: a small, clearly-clickable link chip after the label
-   (and after the reminder icon, when present). The border + accent tint set it
-   apart from the passive alarm icon. */
-.now-date-link-icon {
+/* A graph-linked date shows a trailing "open note" segment: a thin divider
+   line, then a slightly lighter background behind the link glyph so it reads
+   as a separate, clickable region of the pill. Fills with the accent colour on
+   hover. The right corners match the pill; the negative right margin cancels
+   the pill's padding so the segment reaches its edge. */
+.now-date-pill .now-date-link-icon {
 	display: inline-flex;
 	align-items: center;
-	margin-left: 5px;
-	padding: 0 3px;
-	border: 1px solid currentColor;
-	border-radius: 3px;
+	justify-content: center;
+	align-self: stretch;
+	margin: 0 -4px 0 5px;
+	padding: 0 5px;
+	border-left: 1px solid var(--background-modifier-border);
+	border-radius: 0 4px 4px 0;
 	color: var(--text-accent);
-	opacity: 0.7;
+	background-color: rgba(255, 255, 255, 0.15);
 	cursor: pointer;
-	transition: opacity 0.1s ease, background-color 0.1s ease;
+	transition: background-color 0.1s ease, color 0.1s ease;
 }
 
-.now-date-link-icon:hover {
-	opacity: 1;
-	background-color: var(--background-modifier-hover);
+.now-date-pill .now-date-link-icon:hover {
+	color: var(--text-on-accent);
+	background-color: var(--interactive-accent);
+}
+
+/* The same glyph in the picker preview is just a plain accent icon. */
+.now-dp-preview .now-date-link-icon {
+	margin-left: 5px;
+	color: var(--text-accent);
+	vertical-align: middle;
 }
 
 .now-date-link-icon svg {
-	width: 0.85em;
-	height: 0.85em;
-	vertical-align: -0.1em;
-	stroke-width: 2;
+	display: block;
+	width: 0.8em;
+	height: 0.8em;
+	stroke-width: 2.25;
 }
 
 /* ---- Floating date picker ---- */

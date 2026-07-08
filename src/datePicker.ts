@@ -62,6 +62,7 @@ export class DatePicker {
 	private gridEl!: HTMLElement;
 	private headerLabel!: HTMLElement;
 	private previewEl!: HTMLElement;
+	private previewTextEl!: HTMLElement;
 	private timeInput!: HTMLInputElement;
 	private timeToggle!: HTMLInputElement;
 
@@ -232,17 +233,21 @@ export class DatePicker {
 	// --- DOM ------------------------------------------------------------------
 
 	private buildDom(): void {
+		// Preview row: the formatted result on the left, "Now" (jump to today) on
+		// the right. The link glyph, when linked, sits inline after the date.
 		this.previewEl = this.root.createDiv({ cls: "now-dp-preview" });
+		this.previewTextEl = this.previewEl.createSpan({ cls: "now-dp-preview-text" });
+		const nowBtn = this.previewEl.createEl("button", { cls: "now-dp-now", text: "Now" });
+		nowBtn.setAttr("aria-label", "Jump to today");
+		nowBtn.addEventListener("click", () => this.setSelectedDate(new Date()));
 
+		// Month header: prev / centered title / next.
 		const header = this.root.createDiv({ cls: "now-dp-header" });
 		const prev = header.createEl("button", { cls: "now-dp-nav", text: "<" });
 		prev.setAttr("aria-label", "Previous month");
 		prev.addEventListener("click", () => this.shiftMonth(-1));
 
 		this.headerLabel = header.createDiv({ cls: "now-dp-title" });
-
-		const nowBtn = header.createEl("button", { cls: "now-dp-now", text: "Now" });
-		nowBtn.addEventListener("click", () => this.setSelectedDate(new Date()));
 
 		const next = header.createEl("button", { cls: "now-dp-nav", text: ">" });
 		next.setAttr("aria-label", "Next month");
@@ -254,6 +259,9 @@ export class DatePicker {
 		}
 
 		this.gridEl = this.root.createDiv({ cls: "now-dp-grid" });
+
+		// Separates the calendar from the options stack below.
+		this.root.createDiv({ cls: "now-dp-divider" });
 
 		// Date format menu.
 		this.fmtMenu = this.addMenuRow(
@@ -485,10 +493,10 @@ export class DatePicker {
 
 	private updatePreview(message?: string): void {
 		if (message) {
-			this.previewEl.setText(message);
+			this.previewTextEl.setText(message);
 			return;
 		}
-		this.previewEl.setText(
+		this.previewTextEl.setText(
 			formatPill(this.selected, this.hasTime, {
 				format: this.format,
 				timeFormat: this.timeFormat,
@@ -496,7 +504,10 @@ export class DatePicker {
 			})
 		);
 		if (this.linked) {
-			setIcon(this.previewEl.createSpan({ cls: "now-date-link-icon" }), "link");
+			setIcon(
+				this.previewTextEl.createSpan({ cls: "now-date-link-icon" }),
+				"link"
+			);
 		}
 	}
 

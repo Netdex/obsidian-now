@@ -301,14 +301,26 @@
 	width: auto;
 }
 
-/* Inline "Open" action beside the link toggle. */
-.now-dp-open {
+/* Inline "Open" action beside the link toggle: a quiet accent text button
+   (scoped to beat Obsidian's raised button base), tied to the link toggle it
+   sits next to rather than shouting as a raised box mid-dialog. */
+.now-datepicker .now-dp-open {
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
+	gap: 5px;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	color: var(--text-accent);
 	font-size: 12px;
-	padding: 2px 8px;
+	padding: 4px 8px;
+	border-radius: 6px;
 	cursor: pointer;
+}
+
+.now-datepicker .now-dp-open:hover {
+	background-color: var(--background-modifier-hover);
+	box-shadow: none;
 }
 
 .now-dp-open-icon {
@@ -342,6 +354,19 @@
 	cursor: pointer;
 }
 
-.now-dp-clear {
+/* Clear is destructive and secondary: a quiet ghost button (scoped to beat
+   Obsidian's raised button base) that only tints on hover, so it doesn't
+   compete with the primary Update action. */
+.now-datepicker .now-dp-clear {
+	background: transparent;
+	border: none;
+	box-shadow: none;
 	color: var(--text-error);
+	padding: 6px 10px;
+	border-radius: 6px;
+}
+
+.now-datepicker .now-dp-clear:hover {
+	background-color: var(--background-modifier-error-hover, var(--background-modifier-hover));
+	box-shadow: none;
 }

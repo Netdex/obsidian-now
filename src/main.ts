@@ -5,6 +5,7 @@ import {
 	nowEditorExtensions,
 	PickerHost,
 	dateTokenAt,
+	appendLinkIcon,
 	appendReminderIcon,
 	reminderPillState,
 } from "./editorExtension";
@@ -12,10 +13,12 @@ import {
 	DateFormat,
 	DATE_FORMAT_LABELS,
 	DATE_FORMAT_ORDER,
+	ParsedDate,
 	TimeFormat,
 	dateTokenRegexGlobal,
 	formatPill,
 	formatToken,
+	isoDate,
 	parseNaturalDate,
 	parseToken,
 } from "./dateUtils";
@@ -27,11 +30,15 @@ interface NowSettings {
 	defaultFormat: DateFormat;
 	// Time format applied to new timed dates.
 	defaultTimeFormat: TimeFormat;
+	// Whether new dates are stored as [[YYYY-MM-DD]] wikilinks (graph mentions)
+	// by default. Still toggleable per date from the picker.
+	defaultLinked: boolean;
 }
 
 const DEFAULT_SETTINGS: NowSettings = {
 	defaultFormat: "rel",
 	defaultTimeFormat: "12",
+	defaultLinked: true,
 };
 
 export default class NowPlugin extends Plugin implements PickerHost {
@@ -42,7 +49,9 @@ export default class NowPlugin extends Plugin implements PickerHost {
 	async onload(): Promise<void> {
 		await this.loadSettings();
 		this.registerEditorExtension(nowEditorExtensions(this));
-		this.registerMarkdownPostProcessor((el) => this.decorateReadingView(el));
+		this.registerMarkdownPostProcessor((el, ctx) =>
+			this.decorateReadingView(el, ctx.sourcePath)
+		);
 		this.addSettingTab(new NowSettingTab(this));
 	}
 
@@ -79,6 +88,7 @@ export default class NowPlugin extends Plugin implements PickerHost {
 			initialTimeFormat: this.settings.defaultTimeFormat,
 			initialTz: null,
 			initialReminder: "none",
+			initialLinked: this.settings.defaultLinked,
 			mode: "new",
 			onSubmit: (value) => this.commitSessionValue(value),
 			onClear: () => this.clearSession(),
@@ -86,6 +96,11 @@ export default class NowPlugin extends Plugin implements PickerHost {
 				this.session = null;
 				this.activePicker = null;
 				view.focus();
+			},
+			onOpenNote: (date) => {
+				this.session = null;
+				this.activePicker = null;
+				this.openDatePage(isoDate(date), false);
 			},
 		});
 		// Reflect anything already typed after the "@".
@@ -160,7 +175,8 @@ export default class NowPlugin extends Plugin implements PickerHost {
 			value.date,
 			value.hasTime,
 			{ format: value.format, timeFormat: value.timeFormat, tz: value.tz },
-			value.reminder
+			value.reminder,
+			value.linked
 		);
 		view.dispatch({
 			changes: { from: anchor, to, insert: token },
@@ -210,6 +226,7 @@ export default class NowPlugin extends Plugin implements PickerHost {
 					: this.settings.defaultTimeFormat,
 			initialTz: parsed ? parsed.tz : null,
 			initialReminder: parsed ? parsed.reminder : "none",
+			initialLinked: parsed ? parsed.linked : this.settings.defaultLinked,
 			mode: "edit",
 			onSubmit: (value) => {
 				this.activePicker = null;
@@ -218,7 +235,8 @@ export default class NowPlugin extends Plugin implements PickerHost {
 					value.date,
 					value.hasTime,
 					{ format: value.format, timeFormat: value.timeFormat, tz: value.tz },
-					value.reminder
+					value.reminder,
+					value.linked
 				);
 				view.dispatch({
 					changes: { from: current.from, to: current.to, insert: token },
@@ -239,12 +257,28 @@ export default class NowPlugin extends Plugin implements PickerHost {
 				this.activePicker = null;
 				view.focus();
 			},
+			onOpenNote: (date) => {
+				this.activePicker = null;
+				this.openDatePage(isoDate(date), false);
+			},
 		});
+	}
+
+	// Opens (or creates) the daily note for an ISO date, resolved relative to the
+	// active file so Obsidian's daily-note folder settings apply.
+	openDatePage(iso: string, newLeaf: boolean): void {
+		const sourcePath = this.app.workspace.getActiveFile()?.path ?? "";
+		void this.app.workspace.openLinkText(iso, sourcePath, newLeaf);
 	}
 
 	// --- reading (preview) mode ---------------------------------------------
 
-	private decorateReadingView(el: HTMLElement): void {
+	private decorateReadingView(el: HTMLElement, sourcePath: string): void {
+		// A linked date is rendered by Obsidian as an <a> internal link before we
+		// see the DOM, splitting the token across sibling nodes; absorb those first
+		// so the plain text pass below only has to handle unlinked tokens.
+		this.decorateLinkedReadingView(el, sourcePath);
+
 		const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
 		const targets: Text[] = [];
 		let node: Node | null;
@@ -267,26 +301,12 @@ export default class NowPlugin extends Plugin implements PickerHost {
 				if (m.index > last) {
 					frag.appendChild(document.createTextNode(text.slice(last, m.index)));
 				}
-				const span = document.createElement("span");
-				span.className = "now-date-pill";
 				const parsed = parseToken(m[0]);
-				span.appendChild(
-					document.createTextNode(
-						parsed
-							? formatPill(parsed.date, parsed.hasTime, {
-									format: parsed.format,
-									timeFormat: parsed.timeFormat ?? this.settings.defaultTimeFormat,
-									tz: parsed.tz,
-							  })
-							: m[0]
-					)
+				frag.appendChild(
+					parsed
+						? this.buildReadingPill(parsed, sourcePath)
+						: document.createTextNode(m[0])
 				);
-				const rstate = parsed ? reminderPillState(parsed) : "none";
-				if (rstate !== "none") {
-					span.classList.add(`now-date-pill-reminder-${rstate}`);
-					appendReminderIcon(span);
-				}
-				frag.appendChild(span);
 				last = m.index + m[0].length;
 			}
 			if (last < text.length) {
@@ -294,6 +314,83 @@ export default class NowPlugin extends Plugin implements PickerHost {
 			}
 			textNode.parentNode?.replaceChild(frag, textNode);
 		}
+	}
+
+	// Finds the ISO-date internal links Obsidian rendered from a linked token
+	// (@[[2026-07-05]]...) and folds the surrounding "@" and "~segments" text back
+	// into a single pill, so linked and unlinked dates look identical.
+	private decorateLinkedReadingView(el: HTMLElement, sourcePath: string): void {
+		const anchors = Array.from(
+			el.querySelectorAll("a.internal-link")
+		) as HTMLAnchorElement[];
+		for (const a of anchors) {
+			const iso = (a.getAttribute("data-href") ?? a.textContent ?? "").trim();
+			if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) continue;
+
+			const prev = a.previousSibling;
+			if (!prev || prev.nodeType !== Node.TEXT_NODE) continue;
+			const prevText = prev.nodeValue ?? "";
+			if (!prevText.endsWith("@")) continue;
+			// Same word-boundary guard as inline typing: "@" must not follow a
+			// non-space character (avoids e.g. an email address).
+			const before = prevText.slice(0, -1);
+			if (before && /\S$/.test(before)) continue;
+
+			const next = a.nextSibling;
+			const nextText =
+				next && next.nodeType === Node.TEXT_NODE ? next.nodeValue ?? "" : "";
+
+			// Rebuild the canonical token and see how much of the trailing text
+			// (an optional time and the "~" segments) belongs to it.
+			const prefix = `@[[${iso}]]`;
+			const m = `${prefix}${nextText}`.match(dateTokenRegexGlobal());
+			if (!m || m.index !== 0) continue;
+			const parsed = parseToken(m[0]);
+			if (!parsed) continue;
+
+			prev.nodeValue = before;
+			a.replaceWith(this.buildReadingPill(parsed, sourcePath));
+			if (next && next.nodeType === Node.TEXT_NODE) {
+				next.nodeValue = nextText.slice(m[0].length - prefix.length);
+			}
+		}
+	}
+
+	// Builds the reading-view pill for a parsed token. Linked dates get a glyph
+	// and open their note on click (a new pane with a modifier), matching the
+	// editor pill.
+	private buildReadingPill(parsed: ParsedDate, sourcePath: string): HTMLElement {
+		const span = document.createElement("span");
+		span.className = "now-date-pill";
+		span.appendChild(
+			document.createTextNode(
+				formatPill(parsed.date, parsed.hasTime, {
+					format: parsed.format,
+					timeFormat: parsed.timeFormat ?? this.settings.defaultTimeFormat,
+					tz: parsed.tz,
+				})
+			)
+		);
+		if (parsed.linked) {
+			const iso = isoDate(parsed.date);
+			span.classList.add("now-date-pill-linked");
+			span.setAttribute("aria-label", "Open the date note");
+			appendLinkIcon(span);
+			span.addEventListener("click", (e) => {
+				e.preventDefault();
+				void this.app.workspace.openLinkText(
+					iso,
+					sourcePath,
+					e.metaKey || e.ctrlKey
+				);
+			});
+		}
+		const rstate = reminderPillState(parsed);
+		if (rstate !== "none") {
+			span.classList.add(`now-date-pill-reminder-${rstate}`);
+			appendReminderIcon(span);
+		}
+		return span;
 	}
 }
 
@@ -333,6 +430,21 @@ class NowSettingTab extends PluginSettingTab {
 				dd.setValue(this.plugin.settings.defaultTimeFormat);
 				dd.onChange(async (value) => {
 					this.plugin.settings.defaultTimeFormat = value as TimeFormat;
+					await this.plugin.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Link dates by default")
+			.setDesc(
+				"Store new dates as [[YYYY-MM-DD]] wikilinks so they appear in the " +
+					"graph and can be opened as daily notes. You can still toggle this " +
+					"per date in the picker."
+			)
+			.addToggle((tg) => {
+				tg.setValue(this.plugin.settings.defaultLinked);
+				tg.onChange(async (value) => {
+					this.plugin.settings.defaultLinked = value;
 					await this.plugin.saveSettings();
 				});
 			});

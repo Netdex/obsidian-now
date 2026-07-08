@@ -8,6 +8,13 @@
 //   @2026-07-05 09:00~full~t12      -> "July 5, 2026 9:00 AM"
 //   @2026-07-05 09:00~rel~t24~z=America/New_York -> "Monday 09:00 EDT"
 //
+// The date may optionally be wrapped in an Obsidian wikilink so it shows up in
+// the knowledge graph and can be opened as a daily note. Only the date itself is
+// linked; the time and "~" segments stay outside the brackets:
+//
+//   @[[2026-07-05]]~rel             -> a graph-linked "Monday"
+//   @[[2026-07-05]] 09:00~full~t12  -> a graph-linked "July 5, 2026 9:00 AM"
+//
 // Segments: date format (rel/full/short/mdy/dmy/ymd; iso = none),
 // time format (t12/t24), timezone (z=<IANA>). The suffix is only ever seen by
 // someone opening the note without this plugin.
@@ -113,9 +120,14 @@ export const COMMON_TIMEZONES = [
 	"Australia/Sydney",
 ];
 
-// @YYYY-MM-DD [ HH:mm] [~segments]
+// @[[YYYY-MM-DD]] or @YYYY-MM-DD, then [ HH:mm] [~segments].
+// The date part is one of two alternatives so the closing "]]" is only ever
+// consumed when a matching "[[" opened it -- otherwise a plain @date sitting
+// inside an unrelated wikilink (e.g. "[[Meeting @2026-07-05]]") would swallow
+// that link's brackets. Linked groups: 1-3 (y/m/d); unlinked groups: 4-6 (y/m/d);
+// then 7-8 (hh/mm) and 9 (segments).
 export const DATE_TOKEN_REGEX =
-	/@(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?((?:~(?:rel|full|short|mdy|dmy|ymd|t12|t24|z=[A-Za-z0-9_+\/-]+|r=(?:at|m5|m10|m15|m30|h1|h2|day|d1|d2|w1)))*)/;
+	/@(?:\[\[(\d{4})-(\d{2})-(\d{2})\]\]|(\d{4})-(\d{2})-(\d{2}))(?:[ T](\d{2}):(\d{2}))?((?:~(?:rel|full|short|mdy|dmy|ymd|t12|t24|z=[A-Za-z0-9_+\/-]+|r=(?:at|m5|m10|m15|m30|h1|h2|day|d1|d2|w1)))*)/;
 
 export function dateTokenRegexGlobal(): RegExp {
 	return new RegExp(DATE_TOKEN_REGEX.source, "g");
@@ -144,6 +156,7 @@ export interface ParsedDate {
 	timeFormat: TimeFormat | null; // null -> caller falls back to a default
 	tz: string | null;
 	reminder: ReminderCode;
+	linked: boolean; // date stored as an [[wikilink]] for the graph
 }
 
 function pad(n: number): string {
@@ -168,7 +181,7 @@ export function isSameDay(a: Date, b: Date): boolean {
 	);
 }
 
-function isoDate(d: Date): string {
+export function isoDate(d: Date): string {
 	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
@@ -177,9 +190,11 @@ export function formatToken(
 	date: Date,
 	hasTime: boolean,
 	opts: DisplayOpts,
-	reminder: ReminderCode = "none"
+	reminder: ReminderCode = "none",
+	linked = false
 ): string {
-	let s = "@" + isoDate(date);
+	const iso = isoDate(date);
+	let s = "@" + (linked ? `[[${iso}]]` : iso);
 	if (hasTime) s += ` ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 	if (opts.format !== "iso") s += "~" + opts.format;
 	if (hasTime) s += opts.timeFormat === "24" ? "~t24" : "~t12";
@@ -191,13 +206,19 @@ export function formatToken(
 export function parseToken(token: string): ParsedDate | null {
 	const m = token.match(DATE_TOKEN_REGEX);
 	if (!m) return null;
-	const hasTime = m[4] !== undefined && m[5] !== undefined;
+	// The date matched either the linked branch (groups 1-3) or the unlinked
+	// branch (groups 4-6); exactly one is present.
+	const linked = m[1] !== undefined;
+	const year = linked ? m[1] : m[4];
+	const month = linked ? m[2] : m[5];
+	const day = linked ? m[3] : m[6];
+	const hasTime = m[7] !== undefined && m[8] !== undefined;
 	const date = new Date(
-		Number(m[1]),
-		Number(m[2]) - 1,
-		Number(m[3]),
-		hasTime ? Number(m[4]) : 0,
-		hasTime ? Number(m[5]) : 0,
+		Number(year),
+		Number(month) - 1,
+		Number(day),
+		hasTime ? Number(m[7]) : 0,
+		hasTime ? Number(m[8]) : 0,
 		0,
 		0
 	);
@@ -207,14 +228,14 @@ export function parseToken(token: string): ParsedDate | null {
 	let timeFormat: TimeFormat | null = null;
 	let tz: string | null = null;
 	let reminder: ReminderCode = "none";
-	for (const seg of (m[6] || "").split("~").filter(Boolean)) {
+	for (const seg of (m[9] || "").split("~").filter(Boolean)) {
 		if (FORMAT_CODES.has(seg)) format = seg as DateFormat;
 		else if (seg === "t12") timeFormat = "12";
 		else if (seg === "t24") timeFormat = "24";
 		else if (seg.startsWith("z=")) tz = seg.slice(2);
 		else if (seg.startsWith("r=")) reminder = seg.slice(2) as ReminderCode;
 	}
-	return { date, hasTime, format, timeFormat, tz, reminder };
+	return { date, hasTime, format, timeFormat, tz, reminder, linked };
 }
 
 function relativeLabel(date: Date): string {

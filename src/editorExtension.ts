@@ -14,6 +14,7 @@ import {
 	TimeFormat,
 	dateTokenRegexGlobal,
 	formatPill,
+	isoDate,
 	parseToken,
 	reminderFireLocal,
 } from "./dateUtils";
@@ -35,6 +36,14 @@ export function appendReminderIcon(el: HTMLElement): void {
 	setIcon(icon, "alarm-clock");
 }
 
+// Adds a small link glyph to a pill whose date is a graph wikilink. Clicking the
+// glyph (returned so callers can detect it) opens the date's note.
+export function appendLinkIcon(el: HTMLElement): HTMLElement {
+	const icon = el.createSpan({ cls: "now-date-link-icon" });
+	setIcon(icon, "link");
+	return icon;
+}
+
 // The plugin implements these; kept as an interface to avoid a circular import.
 export interface PickerHost {
 	// Inline typing session.
@@ -46,6 +55,8 @@ export interface PickerHost {
 	navigateSession(deltaDays: number): boolean;
 	// Editing an existing pill.
 	openPickerForEdit(view: EditorView, from: number, to: number): void;
+	// Follow a graph-linked date to its daily note (Ctrl/Cmd-click, glyph, etc.).
+	openDatePage(iso: string, newLeaf: boolean): void;
 	// Fallback time format for tokens that predate the ~t12/~t24 suffix.
 	getDefaultTimeFormat(): TimeFormat;
 }
@@ -71,27 +82,49 @@ class DatePillWidget extends WidgetType {
 	constructor(
 		readonly display: string,
 		readonly reminder: ReminderPillState,
+		readonly linked: boolean,
+		readonly iso: string,
 		readonly host: PickerHost
 	) {
 		super();
 	}
 
 	eq(other: DatePillWidget): boolean {
-		return other.display === this.display && other.reminder === this.reminder;
+		return (
+			other.display === this.display &&
+			other.reminder === this.reminder &&
+			other.linked === this.linked &&
+			other.iso === this.iso
+		);
 	}
 
 	toDOM(view: EditorView): HTMLElement {
 		const span = document.createElement("span");
 		span.className = "now-date-pill";
 		span.appendChild(document.createTextNode(this.display));
+		let linkIcon: HTMLElement | null = null;
+		if (this.linked) {
+			span.classList.add("now-date-pill-linked");
+			span.setAttribute("aria-label", "Ctrl/Cmd-click to open the date note");
+			linkIcon = appendLinkIcon(span);
+		}
 		if (this.reminder !== "none") {
 			span.classList.add(`now-date-pill-reminder-${this.reminder}`);
 			appendReminderIcon(span);
 		}
 		span.addEventListener("mousedown", (e) => {
-			if (e.button !== 0) return;
+			// Left (0) edits or navigates; middle (1) navigates to a new pane.
+			if (e.button !== 0 && e.button !== 1) return;
 			e.preventDefault();
 			e.stopPropagation();
+			const onGlyph = linkIcon !== null && linkIcon.contains(e.target as Node);
+			const modifier = e.metaKey || e.ctrlKey;
+			if (this.linked && (e.button === 1 || modifier || onGlyph)) {
+				// New pane on middle-click or with a modifier, mirroring Obsidian.
+				this.host.openDatePage(this.iso, e.button === 1 || modifier);
+				return;
+			}
+			if (e.button !== 0) return; // middle-click on a non-linked pill: nothing
 			const pos = view.posAtDOM(span);
 			const token = dateTokenAt(view, pos) ?? dateTokenAt(view, pos + 1);
 			if (token) this.host.openPickerForEdit(view, token.from, token.to);
@@ -165,7 +198,13 @@ function pillExtension(host: PickerHost): Extension {
 					start,
 					end,
 					Decoration.replace({
-						widget: new DatePillWidget(display, reminderPillState(parsed), host),
+						widget: new DatePillWidget(
+							display,
+							reminderPillState(parsed),
+							parsed.linked,
+							isoDate(parsed.date),
+							host
+						),
 					})
 				);
 			}
@@ -198,5 +237,7 @@ function pillExtension(host: PickerHost): Extension {
 }
 
 export function nowEditorExtensions(host: PickerHost): Extension[] {
-	return [triggerExtension(host), sessionKeymap(host), pillExtension(host)];
+	// The pill runs at high precedence so its atomic replace decoration wins over
+	// Obsidian's own live-preview rendering of the inner [[wikilink]].
+	return [triggerExtension(host), sessionKeymap(host), Prec.high(pillExtension(host))];
 }

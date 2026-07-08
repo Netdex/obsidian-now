@@ -1,3 +1,4 @@
+import { setIcon } from "obsidian";
 import {
 	COMMON_TIMEZONES,
 	DateFormat,
@@ -22,6 +23,7 @@ export interface PickerValue {
 	timeFormat: TimeFormat;
 	tz: string | null;
 	reminder: ReminderCode;
+	linked: boolean;
 }
 
 export interface DatePickerOptions {
@@ -32,12 +34,15 @@ export interface DatePickerOptions {
 	initialTimeFormat: TimeFormat;
 	initialTz: string | null;
 	initialReminder: ReminderCode;
+	initialLinked: boolean;
 	// "new" is used while typing inline (editor keeps focus, plugin drives keys);
 	// "edit" is used when a pill is clicked (picker handles its own keys).
 	mode: "new" | "edit";
 	onSubmit: (value: PickerValue) => void;
 	onClear: () => void;
 	onCancel: () => void;
+	// Open the note for the currently selected date (tears the picker down first).
+	onOpenNote: (date: Date) => void;
 }
 
 interface MenuOption {
@@ -65,6 +70,8 @@ export class DatePicker {
 	private tzMenu!: MenuHandle;
 	private remindMenu!: MenuHandle;
 
+	private linkToggle!: HTMLInputElement;
+
 	private viewDate: Date;
 	private selected: Date;
 	private hasTime: boolean;
@@ -72,12 +79,14 @@ export class DatePicker {
 	private timeFormat: TimeFormat;
 	private tz: string | null;
 	private reminder: ReminderCode;
+	private linked: boolean;
 	private readonly mode: "new" | "edit";
 	private submitted = false;
 
 	private onSubmit: DatePickerOptions["onSubmit"];
 	private onClear: DatePickerOptions["onClear"];
 	private onCancel: DatePickerOptions["onCancel"];
+	private onOpenNote: DatePickerOptions["onOpenNote"];
 	private anchor: DatePickerOptions["coords"];
 
 	private readonly onDocMouseDown = (e: MouseEvent) => {
@@ -128,10 +137,12 @@ export class DatePicker {
 		this.timeFormat = opts.initialTimeFormat;
 		this.tz = opts.initialTz;
 		this.reminder = opts.initialReminder;
+		this.linked = opts.initialLinked;
 		this.mode = opts.mode;
 		this.onSubmit = opts.onSubmit;
 		this.onClear = opts.onClear;
 		this.onCancel = opts.onCancel;
+		this.onOpenNote = opts.onOpenNote;
 		this.anchor = opts.coords;
 
 		this.root = document.createElement("div");
@@ -161,6 +172,7 @@ export class DatePicker {
 			timeFormat: this.timeFormat,
 			tz: this.tz,
 			reminder: this.reminder,
+			linked: this.linked,
 		};
 	}
 
@@ -324,6 +336,28 @@ export class DatePicker {
 			}
 		);
 
+		// Link-to-note toggle, with an inline "Open" action for the selected date.
+		const linkRow = this.root.createDiv({ cls: "now-dp-row" });
+		const linkLabel = linkRow.createEl("label", { cls: "now-dp-time-label" });
+		this.linkToggle = linkLabel.createEl("input", { type: "checkbox" });
+		this.linkToggle.checked = this.linked;
+		linkLabel.createSpan({ text: "Link to date note" });
+		this.linkToggle.addEventListener("change", () => {
+			this.linked = this.linkToggle.checked;
+			this.updatePreview();
+		});
+		const openBtn = linkRow.createEl("button", { cls: "now-dp-open" });
+		setIcon(openBtn.createSpan({ cls: "now-dp-open-icon" }), "link");
+		openBtn.createSpan({ text: "Open" });
+		openBtn.setAttr("aria-label", "Open the note for this date");
+		openBtn.addEventListener("click", () => {
+			const date = new Date(this.selected.getTime());
+			// Tear down without firing onCancel so we don't steal focus back to the
+			// editor the moment the date note opens.
+			this.close(false);
+			this.onOpenNote(date);
+		});
+
 		// Footer: Clear (left) + Insert/Update (right).
 		const footer = this.root.createDiv({ cls: "now-dp-footer" });
 		const clearBtn = footer.createEl("button", {
@@ -461,6 +495,9 @@ export class DatePicker {
 				tz: this.tz,
 			})
 		);
+		if (this.linked) {
+			setIcon(this.previewEl.createSpan({ cls: "now-date-link-icon" }), "link");
+		}
 	}
 
 	private reposition(coords: DatePickerOptions["coords"]): void {

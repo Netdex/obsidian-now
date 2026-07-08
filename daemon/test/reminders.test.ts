@@ -16,6 +16,24 @@ test("date-only 'd1' fires 09:00 the day before, in the default zone", () => {
 	assert.equal(rs[0].reminder, "d1");
 });
 
+test("a graph-linked date (@[[..]]) is parsed like a plain one", () => {
+	const rs = extractReminders("note.md", "task @[[2026-03-23]]~rel~r=d1 done", NY);
+	assert.equal(rs.length, 1);
+	const expected = DateTime.fromObject(
+		{ year: 2026, month: 3, day: 22, hour: 9 },
+		{ zone: NY }
+	).toMillis();
+	assert.equal(rs[0].fireMillis, expected);
+	assert.equal(rs[0].reminder, "d1");
+});
+
+test("a plain @date inside an unrelated wikilink keeps that link's brackets", () => {
+	// The token must not swallow the closing "]]" of the surrounding link.
+	const rs = extractReminders("note.md", "see [[Meeting @2026-03-23~r=day]] here", NY);
+	assert.equal(rs.length, 1);
+	assert.equal(rs[0].raw, "@2026-03-23~r=day");
+});
+
 test("date-only 'w1' fires 09:00 one week before", () => {
 	const rs = extractReminders("n.md", "@2026-03-23~r=w1", NY);
 	const expected = DateTime.fromObject(

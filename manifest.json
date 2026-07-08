@@ -1,7 +1,7 @@
 {
 	"id": "obsidian-now",
 	"name": "Now Date Picker",
-	"version": "1.6.7",
+	"version": "1.6.8",
 	"minAppVersion": "1.4.0",
 	"description": "Type @ to open a date picker and insert an inline date like @2026-07-05 (with optional time). Click a date to edit it, Notion-style.",
 	"author": "netdex",

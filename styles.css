@@ -48,11 +48,11 @@
 	stroke-width: 2;
 }
 
-/* A graph-linked date shows a trailing "open note" segment: a thin divider
-   line, then a slightly lighter background behind the link glyph so it reads
-   as a separate, clickable region of the pill. Fills with the accent colour on
-   hover. The right corners match the pill; the negative right margin cancels
-   the pill's padding so the segment reaches its edge. */
+/* A graph-linked date shows a trailing "open note" segment: a solid accent
+   button docked at the pill's end, so it reads unmistakably as a clickable
+   action distinct from the soft pill body. The right corners match the pill;
+   the negative right margin cancels the pill's padding so the segment reaches
+   its edge. Darkens on hover. */
 .now-date-pill .now-date-link-icon {
 	display: inline-flex;
 	align-items: center;
@@ -60,17 +60,15 @@
 	align-self: stretch;
 	margin: 0 -4px 0 5px;
 	padding: 0 5px;
-	border-left: 1px solid var(--background-modifier-border);
 	border-radius: 0 4px 4px 0;
-	color: var(--text-accent);
-	background-color: rgba(255, 255, 255, 0.15);
+	color: var(--text-on-accent);
+	background-color: var(--interactive-accent);
 	cursor: pointer;
-	transition: background-color 0.1s ease, color 0.1s ease;
+	transition: background-color 0.1s ease;
 }
 
 .now-date-pill .now-date-link-icon:hover {
-	color: var(--text-on-accent);
-	background-color: var(--interactive-accent);
+	background-color: var(--interactive-accent-hover);
 }
 
 /* The same glyph in the picker preview is just a plain accent icon. */

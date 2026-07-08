@@ -367,6 +367,8 @@
 }
 
 .now-datepicker .now-dp-clear:hover {
-	background-color: var(--background-modifier-error-hover, var(--background-modifier-hover));
+	/* A neutral tint (not --background-modifier-error-hover, which is a solid
+	   red that would hide the red text); matches the Open button's hover. */
+	background-color: var(--background-modifier-hover);
 	box-shadow: none;
 }

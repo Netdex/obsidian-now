@@ -13,6 +13,7 @@ import {
 	DateFormat,
 	DATE_FORMAT_LABELS,
 	DATE_FORMAT_ORDER,
+	DATE_TOKEN_REGEX,
 	ParsedDate,
 	TimeFormat,
 	dateTokenRegexGlobal,
@@ -341,9 +342,11 @@ export default class NowPlugin extends Plugin implements PickerHost {
 				next && next.nodeType === Node.TEXT_NODE ? next.nodeValue ?? "" : "";
 
 			// Rebuild the canonical token and see how much of the trailing text
-			// (an optional time and the "~" segments) belongs to it.
+			// (an optional time and the "~" segments) belongs to it. Use the
+			// non-global regex so `.match` returns an index (a global-flag match
+			// returns only substrings, dropping `.index` and the capture groups).
 			const prefix = `@[[${iso}]]`;
-			const m = `${prefix}${nextText}`.match(dateTokenRegexGlobal());
+			const m = `${prefix}${nextText}`.match(DATE_TOKEN_REGEX);
 			if (!m || m.index !== 0) continue;
 			const parsed = parseToken(m[0]);
 			if (!parsed) continue;

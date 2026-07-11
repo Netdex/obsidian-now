@@ -72,6 +72,20 @@
 	background-color: rgba(255, 255, 255, 0.85);
 }
 
+/* A linked date whose target note does not exist yet: mute the trailing "open
+   note" chip (dashed divider, muted glyph, no bright fill) so it reads as
+   "clicking will create this note", echoing Obsidian's unresolved-link cue. */
+.now-date-pill-unresolved .now-date-link-icon {
+	background-color: transparent;
+	border-left-style: dashed;
+	color: var(--text-muted);
+}
+
+.now-date-pill-unresolved .now-date-link-icon:hover {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
 /* The same glyph in the picker preview is just a plain accent icon, sitting
    inline after the date (the flex preview row keeps the block svg centred). */
 .now-dp-preview .now-date-link-icon {

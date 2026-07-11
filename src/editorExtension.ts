@@ -1,4 +1,4 @@
-import { Extension, Prec, RangeSetBuilder } from "@codemirror/state";
+import { Extension, Prec, RangeSetBuilder, StateEffect } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
 import {
 	Decoration,
@@ -20,6 +20,12 @@ import {
 } from "./dateUtils";
 
 export type ReminderPillState = "none" | "past" | "future";
+
+// Dispatched into an editor to force the date pills to rebuild. Used when a
+// linked date's target note is created/deleted/renamed, flipping it between
+// resolved and unresolved (which isn't a document change, so the pill view
+// plugin wouldn't otherwise notice).
+export const refreshPillsEffect = StateEffect.define<null>();
 
 // Whether a token's reminder has already fired ("past") or is still upcoming
 // ("future"), for colouring the pill. Uses local time (see reminderFireLocal).
@@ -57,6 +63,9 @@ export interface PickerHost {
 	openPickerForEdit(view: EditorView, from: number, to: number): void;
 	// Follow a graph-linked date to its daily note (Ctrl/Cmd-click, glyph, etc.).
 	openDatePage(iso: string, newLeaf: boolean): void;
+	// Whether the daily note a linked date points at already exists in the vault
+	// (drives the "unresolved" pill styling for not-yet-created notes).
+	dateNoteExists(iso: string): boolean;
 	// Fallback time format for tokens that predate the ~t12/~t24 suffix.
 	getDefaultTimeFormat(): TimeFormat;
 }
@@ -84,6 +93,7 @@ class DatePillWidget extends WidgetType {
 		readonly reminder: ReminderPillState,
 		readonly linked: boolean,
 		readonly iso: string,
+		readonly noteExists: boolean,
 		readonly host: PickerHost
 	) {
 		super();
@@ -94,7 +104,8 @@ class DatePillWidget extends WidgetType {
 			other.display === this.display &&
 			other.reminder === this.reminder &&
 			other.linked === this.linked &&
-			other.iso === this.iso
+			other.iso === this.iso &&
+			other.noteExists === this.noteExists
 		);
 	}
 
@@ -110,7 +121,13 @@ class DatePillWidget extends WidgetType {
 		let linkIcon: HTMLElement | null = null;
 		if (this.linked) {
 			span.classList.add("now-date-pill-linked");
-			span.setAttribute("aria-label", "Ctrl/Cmd-click to open the date note");
+			if (!this.noteExists) span.classList.add("now-date-pill-unresolved");
+			span.setAttribute(
+				"aria-label",
+				this.noteExists
+					? "Ctrl/Cmd-click to open the date note"
+					: "Ctrl/Cmd-click to create the date note"
+			);
 			linkIcon = appendLinkIcon(span);
 		}
 		span.addEventListener("mousedown", (e) => {
@@ -195,6 +212,7 @@ function pillExtension(host: PickerHost): Extension {
 					timeFormat: parsed.timeFormat ?? host.getDefaultTimeFormat(),
 					tz: parsed.tz,
 				});
+				const iso = isoDate(parsed.date);
 				builder.add(
 					start,
 					end,
@@ -203,7 +221,8 @@ function pillExtension(host: PickerHost): Extension {
 							display,
 							reminderPillState(parsed),
 							parsed.linked,
-							isoDate(parsed.date),
+							iso,
+							parsed.linked ? host.dateNoteExists(iso) : true,
 							host
 						),
 					})
@@ -220,7 +239,13 @@ function pillExtension(host: PickerHost): Extension {
 				this.decorations = build(view);
 			}
 			update(update: ViewUpdate) {
-				if (update.docChanged || update.viewportChanged) {
+				if (
+						update.docChanged ||
+						update.viewportChanged ||
+						update.transactions.some((tr) =>
+							tr.effects.some((e) => e.is(refreshPillsEffect))
+						)
+					) {
 					this.decorations = build(update.view);
 				}
 			}

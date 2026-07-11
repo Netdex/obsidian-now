@@ -1,4 +1,4 @@
-import { Plugin, PluginSettingTab, Setting } from "obsidian";
+import { MarkdownView, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { EditorView } from "@codemirror/view";
 import { DatePicker, PickerValue } from "./datePicker";
 import {
@@ -7,6 +7,7 @@ import {
 	dateTokenAt,
 	appendLinkIcon,
 	appendReminderIcon,
+	refreshPillsEffect,
 	reminderPillState,
 } from "./editorExtension";
 import {
@@ -54,6 +55,14 @@ export default class NowPlugin extends Plugin implements PickerHost {
 			this.decorateReadingView(el, ctx.sourcePath)
 		);
 		this.addSettingTab(new NowSettingTab(this));
+
+		// A linked date's pill is styled by whether its daily note exists, which
+		// changes outside the document (note created/deleted/renamed elsewhere).
+		// Rebuild the editor pills whenever the vault's file set changes.
+		const refresh = () => this.refreshPills();
+		this.registerEvent(this.app.vault.on("create", refresh));
+		this.registerEvent(this.app.vault.on("delete", refresh));
+		this.registerEvent(this.app.vault.on("rename", refresh));
 	}
 
 	onunload(): void {
@@ -272,6 +281,25 @@ export default class NowPlugin extends Plugin implements PickerHost {
 		void this.app.workspace.openLinkText(iso, sourcePath, newLeaf);
 	}
 
+	// Whether the note a linked date points at already exists (resolved the same
+	// way Obsidian resolves the [[YYYY-MM-DD]] link), so an unresolved pill can be
+	// styled to signal that clicking it would create the note.
+	dateNoteExists(iso: string): boolean {
+		const sourcePath = this.app.workspace.getActiveFile()?.path ?? "";
+		return this.app.metadataCache.getFirstLinkpathDest(iso, sourcePath) !== null;
+	}
+
+	// Force every open editor's pills to rebuild so their resolved/unresolved
+	// styling reflects the current vault (see refreshPillsEffect).
+	private refreshPills(): void {
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			if (!(leaf.view instanceof MarkdownView)) return;
+			// editor.cm is the underlying CodeMirror 6 EditorView (undocumented).
+			const cm = (leaf.view.editor as unknown as { cm?: EditorView }).cm;
+			cm?.dispatch({ effects: refreshPillsEffect.of(null) });
+		});
+	}
+
 	// --- reading (preview) mode ---------------------------------------------
 
 	private decorateReadingView(el: HTMLElement, sourcePath: string): void {
@@ -382,8 +410,14 @@ export default class NowPlugin extends Plugin implements PickerHost {
 		// Link chip goes last, after any reminder icon.
 		if (parsed.linked) {
 			const iso = isoDate(parsed.date);
+			const exists =
+				this.app.metadataCache.getFirstLinkpathDest(iso, sourcePath) !== null;
 			span.classList.add("now-date-pill-linked");
-			span.setAttribute("aria-label", "Open the date note");
+			if (!exists) span.classList.add("now-date-pill-unresolved");
+			span.setAttribute(
+				"aria-label",
+				exists ? "Open the date note" : "Create the date note"
+			);
 			appendLinkIcon(span);
 			span.addEventListener("click", (e) => {
 				e.preventDefault();

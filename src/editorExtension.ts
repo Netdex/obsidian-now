@@ -44,9 +44,11 @@ export function appendReminderIcon(el: HTMLElement): void {
 
 // Adds a small link glyph to a pill whose date is a graph wikilink. Clicking the
 // glyph (returned so callers can detect it) opens the date's note.
-export function appendLinkIcon(el: HTMLElement): HTMLElement {
+// A not-yet-created note shows a broken "unlink" glyph instead of the "link"
+// one, reinforcing the unresolved styling.
+export function appendLinkIcon(el: HTMLElement, exists = true): HTMLElement {
 	const icon = el.createSpan({ cls: "now-date-link-icon" });
-	setIcon(icon, "link");
+	setIcon(icon, exists ? "link" : "unlink");
 	return icon;
 }
 
@@ -128,7 +130,7 @@ class DatePillWidget extends WidgetType {
 					? "Ctrl/Cmd-click to open the date note"
 					: "Ctrl/Cmd-click to create the date note"
 			);
-			linkIcon = appendLinkIcon(span);
+			linkIcon = appendLinkIcon(span, this.noteExists);
 		}
 		span.addEventListener("mousedown", (e) => {
 			// Left (0) edits or navigates; middle (1) navigates to a new pane.

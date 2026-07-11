@@ -418,7 +418,7 @@ export default class NowPlugin extends Plugin implements PickerHost {
 				"aria-label",
 				exists ? "Open the date note" : "Create the date note"
 			);
-			appendLinkIcon(span);
+			appendLinkIcon(span, exists);
 			span.addEventListener("click", (e) => {
 				e.preventDefault();
 				void this.app.workspace.openLinkText(

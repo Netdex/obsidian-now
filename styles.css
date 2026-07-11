@@ -76,13 +76,13 @@
    the resolved chip's bright fill) with a dashed divider, so it reads as
    "clicking will create this note", echoing Obsidian's unresolved-link cue. */
 .now-date-pill-unresolved .now-date-link-icon {
-	background-color: rgba(150, 150, 150, 0.5);
+	background-color: rgba(210, 210, 210, 0.6);
 	border-left-style: dashed;
 	color: var(--text-muted);
 }
 
 .now-date-pill-unresolved .now-date-link-icon:hover {
-	background-color: rgba(150, 150, 150, 0.75);
+	background-color: rgba(210, 210, 210, 0.85);
 	color: var(--text-normal);
 }
 

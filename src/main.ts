@@ -413,12 +413,12 @@ export default class NowPlugin extends Plugin implements PickerHost {
 			const exists =
 				this.app.metadataCache.getFirstLinkpathDest(iso, sourcePath) !== null;
 			span.classList.add("now-date-pill-linked");
-			if (!exists) span.classList.add("now-date-pill-unresolved");
 			span.setAttribute(
 				"aria-label",
 				exists ? "Open the date note" : "Create the date note"
 			);
-			appendLinkIcon(span, exists);
+			// No chip for a not-yet-created note; clicking the pill still creates it.
+			if (exists) appendLinkIcon(span);
 			span.addEventListener("click", (e) => {
 				e.preventDefault();
 				void this.app.workspace.openLinkText(

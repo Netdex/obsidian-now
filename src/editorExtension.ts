@@ -43,12 +43,11 @@ export function appendReminderIcon(el: HTMLElement): void {
 }
 
 // Adds a small link glyph to a pill whose date is a graph wikilink. Clicking the
-// glyph (returned so callers can detect it) opens the date's note.
-// A not-yet-created note shows a broken "unlink" glyph instead of the "link"
-// one, reinforcing the unresolved styling.
-export function appendLinkIcon(el: HTMLElement, exists = true): HTMLElement {
+// glyph (returned so callers can detect it) opens the date's note. Only shown
+// for a date whose note already exists.
+export function appendLinkIcon(el: HTMLElement): HTMLElement {
 	const icon = el.createSpan({ cls: "now-date-link-icon" });
-	setIcon(icon, exists ? "link" : "unlink");
+	setIcon(icon, "link");
 	return icon;
 }
 
@@ -123,14 +122,16 @@ class DatePillWidget extends WidgetType {
 		let linkIcon: HTMLElement | null = null;
 		if (this.linked) {
 			span.classList.add("now-date-pill-linked");
-			if (!this.noteExists) span.classList.add("now-date-pill-unresolved");
 			span.setAttribute(
 				"aria-label",
 				this.noteExists
 					? "Ctrl/Cmd-click to open the date note"
 					: "Ctrl/Cmd-click to create the date note"
 			);
-			linkIcon = appendLinkIcon(span, this.noteExists);
+			// Only a date whose note already exists gets the "open note" chip; for a
+			// not-yet-created note we show no chip (Ctrl/Cmd- or middle-click still
+			// creates it).
+			if (this.noteExists) linkIcon = appendLinkIcon(span);
 		}
 		span.addEventListener("mousedown", (e) => {
 			// Left (0) edits or navigates; middle (1) navigates to a new pane.

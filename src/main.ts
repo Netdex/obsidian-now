@@ -25,6 +25,16 @@ import {
 	parseToken,
 } from "./dateUtils";
 
+// Whether an element sits inside a reading-view task list item that Obsidian has
+// rendered as completed (its checkbox is checked). Used to strike through a
+// date pill on a done task, mirroring the daemon's isCompletedTaskLine check.
+function inCompletedTask(el: Element | null): boolean {
+	const li = el?.closest("li.task-list-item");
+	if (!li) return false;
+	const mark = li.getAttribute("data-task");
+	return li.classList.contains("is-checked") || mark === "x" || mark === "X";
+}
+
 interface NowSettings {
 	// Format applied to dates chosen from the calendar (no explicit typed
 	// format). Typed relative expressions still become "rel"; typed absolute
@@ -331,9 +341,10 @@ export default class NowPlugin extends Plugin implements PickerHost {
 					frag.appendChild(document.createTextNode(text.slice(last, m.index)));
 				}
 				const parsed = parseToken(m[0]);
+				const completed = inCompletedTask(textNode.parentElement);
 				frag.appendChild(
 					parsed
-						? this.buildReadingPill(parsed, sourcePath)
+						? this.buildReadingPill(parsed, sourcePath, completed)
 						: document.createTextNode(m[0])
 				);
 				last = m.index + m[0].length;
@@ -379,8 +390,9 @@ export default class NowPlugin extends Plugin implements PickerHost {
 			const parsed = parseToken(m[0]);
 			if (!parsed) continue;
 
+			const completed = inCompletedTask(a);
 			prev.nodeValue = before;
-			a.replaceWith(this.buildReadingPill(parsed, sourcePath));
+			a.replaceWith(this.buildReadingPill(parsed, sourcePath, completed));
 			if (next && next.nodeType === Node.TEXT_NODE) {
 				next.nodeValue = nextText.slice(m[0].length - prefix.length);
 			}
@@ -390,9 +402,14 @@ export default class NowPlugin extends Plugin implements PickerHost {
 	// Builds the reading-view pill for a parsed token. Linked dates get a glyph
 	// and open their note on click (a new pane with a modifier), matching the
 	// editor pill.
-	private buildReadingPill(parsed: ParsedDate, sourcePath: string): HTMLElement {
+	private buildReadingPill(
+		parsed: ParsedDate,
+		sourcePath: string,
+		completed: boolean
+	): HTMLElement {
 		const span = document.createElement("span");
 		span.className = "now-date-pill";
+		if (completed) span.classList.add("now-date-pill-done");
 		span.appendChild(
 			document.createTextNode(
 				formatPill(parsed.date, parsed.hasTime, {

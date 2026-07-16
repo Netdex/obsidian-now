@@ -133,6 +133,19 @@ export function dateTokenRegexGlobal(): RegExp {
 	return new RegExp(DATE_TOKEN_REGEX.source, "g");
 }
 
+// A markdown task list item ("- [ ] ...", "* [x] ...", "1. [X] ..."), capturing
+// the single status character between the brackets.
+const TASK_CHECKBOX_REGEX = /^\s*(?:[-*+]|\d+[.)])\s+\[(.)\](?=\s|$)/;
+
+// Whether a line is a task checkbox whose task is completed ("[x]"/"[X]"). Used
+// to suppress reminders (daemon) and strike through the date pill (plugin) once
+// the task is done. Other checkbox states (unchecked, "[/]", "[-]", ...) are not
+// treated as completed.
+export function isCompletedTaskLine(lineText: string): boolean {
+	const m = lineText.match(TASK_CHECKBOX_REGEX);
+	return m !== null && m[1].toLowerCase() === "x";
+}
+
 export const MONTH_NAMES_FULL = [
 	"January", "February", "March", "April", "May", "June",
 	"July", "August", "September", "October", "November", "December",

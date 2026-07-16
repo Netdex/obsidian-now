@@ -14,6 +14,7 @@ import {
 	TimeFormat,
 	dateTokenRegexGlobal,
 	formatPill,
+	isCompletedTaskLine,
 	isoDate,
 	parseToken,
 	reminderFireLocal,
@@ -95,6 +96,7 @@ class DatePillWidget extends WidgetType {
 		readonly linked: boolean,
 		readonly iso: string,
 		readonly noteExists: boolean,
+		readonly completed: boolean,
 		readonly host: PickerHost
 	) {
 		super();
@@ -106,13 +108,15 @@ class DatePillWidget extends WidgetType {
 			other.reminder === this.reminder &&
 			other.linked === this.linked &&
 			other.iso === this.iso &&
-			other.noteExists === this.noteExists
+			other.noteExists === this.noteExists &&
+			other.completed === this.completed
 		);
 	}
 
 	toDOM(view: EditorView): HTMLElement {
 		const span = document.createElement("span");
 		span.className = "now-date-pill";
+		if (this.completed) span.classList.add("now-date-pill-done");
 		span.appendChild(document.createTextNode(this.display));
 		if (this.reminder !== "none") {
 			span.classList.add(`now-date-pill-reminder-${this.reminder}`);
@@ -216,6 +220,9 @@ function pillExtension(host: PickerHost): Extension {
 					tz: parsed.tz,
 				});
 				const iso = isoDate(parsed.date);
+				const completed = isCompletedTaskLine(
+					view.state.doc.lineAt(start).text
+				);
 				builder.add(
 					start,
 					end,
@@ -226,6 +233,7 @@ function pillExtension(host: PickerHost): Extension {
 							parsed.linked,
 							iso,
 							parsed.linked ? host.dateNoteExists(iso) : true,
+							completed,
 							host
 						),
 					})

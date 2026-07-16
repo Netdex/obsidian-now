@@ -2,6 +2,7 @@ import * as crypto from "crypto";
 import { DateTime } from "luxon";
 import {
 	dateTokenRegexGlobal,
+	isCompletedTaskLine,
 	parseToken,
 	reminderOffset,
 	ReminderCode,
@@ -115,6 +116,9 @@ export function extractReminders(
 		const fireISO = fire.toISO() ?? String(fire.toMillis());
 		const line = content.slice(0, m.index).split("\n").length;
 		const lineText = content.split("\n")[line - 1]?.trim() ?? "";
+
+		// A completed task's date is settled -- don't fire its reminder.
+		if (isCompletedTaskLine(lineText)) continue;
 
 		out.push({
 			id: makeId(filePath, eventISO, parsed.reminder, fireISO),

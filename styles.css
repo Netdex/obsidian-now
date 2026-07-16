@@ -31,6 +31,16 @@
 	color: var(--text-on-accent, var(--text-normal));
 }
 
+/* A date on a completed task: struck through and muted so it reads as settled
+   and no longer actionable. Wins over the reminder colouring above (the reminder
+   won't fire for a done task). */
+.now-date-pill-done,
+.now-date-pill-done.now-date-pill-reminder-past,
+.now-date-pill-done.now-date-pill-reminder-future {
+	color: var(--text-muted);
+	text-decoration: line-through;
+}
+
 .now-date-reminder-icon {
 	margin-left: 4px;
 }

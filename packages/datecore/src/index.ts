@@ -186,6 +186,12 @@ export function addDays(d: Date, n: number): Date {
 	return r;
 }
 
+// Midnight on the Sunday that begins d's calendar week. Next/last weekday
+// labels and weekday parsing are anchored to these Sunday-to-Saturday weeks.
+export function startOfWeek(d: Date): Date {
+	return addDays(startOfDay(d), -d.getDay());
+}
+
 export function isSameDay(a: Date, b: Date): boolean {
 	return (
 		a.getFullYear() === b.getFullYear() &&
@@ -259,9 +265,15 @@ function relativeLabel(date: Date): string {
 	if (diff === 1) return "Tomorrow";
 	if (diff === -1) return "Yesterday";
 	const weekday = WEEKDAY_NAMES_FULL[date.getDay()];
-	if (diff >= 2 && diff <= 6) return weekday;
-	if (diff >= 7 && diff <= 13) return "Next " + weekday;
-	if (diff <= -2 && diff >= -7) return "Last " + weekday;
+	// Next/last are anchored to Sunday-to-Saturday calendar weeks, not a rolling
+	// day count: any weekday in the current week is bare, the previous week is
+	// "Last", the following week is "Next".
+	const weekDiff = Math.round(
+		(startOfWeek(date).getTime() - startOfWeek(new Date()).getTime()) / (7 * 86400000)
+	);
+	if (weekDiff === 0) return weekday;
+	if (weekDiff === 1) return "Next " + weekday;
+	if (weekDiff === -1) return "Last " + weekday;
 	// Far away: fall back to a readable absolute date.
 	return `${MONTH_NAMES_SHORT[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
@@ -365,10 +377,13 @@ function weekdayIndex(s: string): number {
 }
 
 function weekdayDate(today: Date, wd: number, mod: string | undefined): Date {
-	let diff = (wd - today.getDay() + 7) % 7;
-	if (mod === "next") diff = diff === 0 ? 7 : diff;
-	else if (mod === "last") diff = diff === 0 ? -7 : diff - 7;
-	return addDays(today, diff);
+	// Anchor to Sunday-to-Saturday weeks so a bare weekday resolves within the
+	// current week (which may be in the past), matching relativeLabel: "monday"
+	// on a Tuesday is this week's Monday, "last"/"next" step a whole week.
+	const base = addDays(today, wd - today.getDay());
+	if (mod === "next") return addDays(base, 7);
+	if (mod === "last") return addDays(base, -7);
+	return base;
 }
 
 function addUnit(base: Date, n: number, unit: string): Date {

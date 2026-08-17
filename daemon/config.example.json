@@ -9,7 +9,16 @@
 	"statePath": "./state.json",
 	"timezone": null,
 	"tickIntervalMs": 30000,
+	"rescanIntervalMs": 3600000,
 	"missedGraceMs": 86400000,
+
+	"ignorePaths": ["Templates/**", "**/Archive/**"],
+
+	"repeat": {
+		"enabled": true,
+		"atHour": 9,
+		"maxDays": null
+	},
 
 	"obsidianVault": "MyVault",
 

@@ -8,16 +8,18 @@ interface Args {
 	dryRun: boolean;
 	verbose: boolean;
 	once: boolean;
+	list: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-	const a: Args = { dryRun: false, verbose: false, once: false };
+	const a: Args = { dryRun: false, verbose: false, once: false, list: false };
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
 		if (arg === "--config" || arg === "-c") a.configPath = argv[++i];
 		else if (arg === "--dry-run") a.dryRun = true;
 		else if (arg === "--verbose" || arg === "-v") a.verbose = true;
 		else if (arg === "--once") a.once = true;
+		else if (arg === "--list" || arg === "-l") a.list = true;
 		else if (arg === "--help" || arg === "-h") {
 			printHelp();
 			process.exit(0);
@@ -35,6 +37,7 @@ function printHelp(): void {
 			`  -c, --config <path>  Config file (default: ./config.json or $CONFIG)\n` +
 			`      --dry-run        Log notifications instead of sending them\n` +
 			`      --once           Scan once, fire due reminders, then exit\n` +
+			`  -l, --list           Scan once, print the indexed reminders, then exit\n` +
 			`  -v, --verbose        Verbose logging\n` +
 			`  -h, --help           Show this help\n`
 	);
@@ -44,7 +47,8 @@ async function main(): Promise<void> {
 	const args = parseArgs(process.argv.slice(2));
 	setVerbose(args.verbose);
 
-	const cfg = loadConfig({ configPath: args.configPath, dryRun: args.dryRun });
+	// --list never notifies, so it does not need Pushover credentials either.
+	const cfg = loadConfig({ configPath: args.configPath, dryRun: args.dryRun || args.list });
 	log.info(
 		`obsidian-remind starting (couch: ${cfg.couch.url}/${cfg.couch.database}, dryRun: ${cfg.dryRun})`
 	);
@@ -63,6 +67,17 @@ async function main(): Promise<void> {
 	state.prune(30 * 24 * 60 * 60 * 1000);
 
 	const daemon = new ReminderDaemon(cfg, state);
+
+	if (args.list) {
+		await daemon.scanAll();
+		const rows = daemon.describeAll();
+		console.log(
+			rows.length > 0
+				? `Next firing       Reminder           Note\n${rows.join("\n")}`
+				: "No reminders found."
+		);
+		process.exit(0);
+	}
 
 	if (args.once) {
 		await daemon.scanAll();

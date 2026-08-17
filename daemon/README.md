@@ -40,6 +40,33 @@ Timezone: a token's own `~z=` zone is used if present; otherwise
 `config.timezone` (or the system zone) applies. Time-based reminders (`at`,
 `m*`, `h*`) only apply to dates that include a time.
 
+### Tasks repeat daily
+
+If the reminder sits on a markdown task line (`- [ ] ...`, `* [ ]`, `1. [ ]`),
+it does not stop after one notification: it re-fires **once a day** until the
+task is completed. Checking the box (`- [x]`) stops it on the next change poll;
+other markers (`[/]`, `[-]`, ...) are not "completed" and keep nagging.
+Reminders that are not on a task line still fire exactly once.
+
+Repeats are controlled by the `repeat` block in `config.json`:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `repeat.enabled` | `true` | `false` = every reminder fires exactly once. |
+| `repeat.atHour` | `9` | Local hour the daily nags fire at. `null` keeps the original fire time of day (so a `m30` reminder nags at that same time). |
+| `repeat.maxDays` | `null` | Give up this many days after the first firing. `null` = nag until the task is done. |
+
+The original firing always happens at the reminder's own time; `atHour` only
+moves the repeats after it.
+
+### One notification per tick
+
+Reminders that come due together -- which repeats make routine, since every
+`day`/`d1`/`w1` reminder lands at the same hour -- are coalesced into a single
+Pushover digest listing each note, rather than one push each. A digest spanning
+several notes links to the vault; a single note (or several reminders in one
+note) still deep-links to that note.
+
 ## Requirements / limitations
 
 - **Plaintext vaults only.** This reader does not support LiveSync
@@ -73,7 +100,10 @@ cp daemon/.env.example daemon/.env                   # COUCHDB_PASSWORD + Pushov
 | `statePath` | Where "already notified" state is stored (default `./state.json`). |
 | `timezone` | IANA zone for dates without an explicit `~z=` (default: system). **Set this** -- in a container the system zone is usually UTC, so date-only "9:00 AM" reminders would fire at 9 AM UTC. |
 | `tickIntervalMs` | How often changes are polled + due reminders checked (default 30000). |
+| `rescanIntervalMs` | How often to re-read the whole vault instead of polling changes (default 1h; `0` disables). Guards against a stale change cursor silently freezing the index. |
 | `missedGraceMs` | Reminders overdue by more than this are suppressed silently (default 24h). |
+| `ignorePaths` | Globs (vault-relative) never scanned, e.g. `["Templates/**", "**/Archive/**", "*.excalidraw.md"]`. `*` stays within a path segment, `**` crosses them, and a pattern with no `/` matches the file name at any depth. |
+| `repeat` | Daily repeat behaviour for reminders on open tasks -- see above. |
 | `obsidianVault` | Optional vault name; adds an `obsidian://` deep link to notifications. |
 | `pushover.token` / `pushover.user` | Pushover app token and user key. |
 
@@ -93,6 +123,17 @@ the config file: `COUCHDB_PASSWORD`, `PUSHOVER_TOKEN`, `PUSHOVER_USER`.
 node dist/src/index.js -c ./config.json
 node dist/src/index.js --dry-run --verbose   # log instead of send
 node dist/src/index.js --once                # scan once, fire due, exit
+node dist/src/index.js --list                # print every indexed reminder, exit
+```
+
+`--list` is the quickest answer to "why didn't that fire?" -- it prints each
+reminder the daemon can see, its next firing (in the reminder's own zone),
+whether it repeats, and the source line:
+
+```
+Next firing       Reminder           Note
+2026-03-22 09:00  [d1,repeats]       Bills/Rent.md:4  - [ ] pay rent @2026-03-23~rel~r=d1
+2026-04-01 09:00  [day]              Work/Sync.md:12  Team sync @2026-04-01~rel~r=day
 ```
 
 ### As a service

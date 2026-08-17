@@ -3,6 +3,7 @@ import { DateTime } from "luxon";
 import {
 	dateTokenRegexGlobal,
 	isCompletedTaskLine,
+	isTaskLine,
 	parseToken,
 	reminderOffset,
 	ReminderCode,
@@ -23,9 +24,96 @@ export interface Reminder {
 	raw: string;
 	reminder: ReminderCode;
 	eventISO: string; // canonical event stamp, tz-independent (used in the id)
-	fireMillis: number; // absolute instant the reminder should fire
+	fireMillis: number; // absolute instant the reminder should first fire
 	fireISO: string;
 	eventHuman: string; // human-friendly event string for the notification body
+	zone: string | null; // zone the fire time was computed in (for daily repeats)
+	repeatDaily: boolean; // open task -> repeat at the same local time each day
+}
+
+// One firing of a reminder: index 0 is the original fire time, index N the Nth
+// daily repeat of an open task.
+export interface Occurrence {
+	index: number;
+	millis: number;
+}
+
+// How an open task's reminder repeats until the task is completed.
+export interface RepeatConfig {
+	enabled: boolean;
+	// Local hour the daily repeats fire at; null keeps the original fire time
+	// of day (e.g. a "30 minutes before" reminder nags at that same time).
+	atHour: number | null;
+	// Stop repeating this many days after the first firing; null = never stop.
+	maxDays: number | null;
+}
+
+export const DEFAULT_REPEAT: RepeatConfig = { enabled: true, atHour: 9, maxDays: null };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function repeats(r: Reminder, repeat: RepeatConfig): boolean {
+	return r.repeatDaily && repeat.enabled;
+}
+
+// Absolute instant of the Nth firing: 0 is the original fire time, N >= 1 the
+// Nth daily repeat. Days are stepped with luxon rather than by adding 24h so a
+// repeat keeps its local time across DST transitions.
+function occurrenceMillis(r: Reminder, index: number, repeat: RepeatConfig): number {
+	if (index === 0) return r.fireMillis;
+	const zone = r.zone ?? undefined;
+	const day = DateTime.fromMillis(r.fireMillis, zone ? { zone } : {}).plus({ days: index });
+	const at =
+		repeat.atHour === null
+			? day
+			: day.set({ hour: repeat.atHour, minute: 0, second: 0, millisecond: 0 });
+	return at.toMillis();
+}
+
+// Index of the last firing at or before `nowMillis` (assumes the reminder is
+// due and repeating). Occurrences are strictly increasing in the index, so a
+// cheap estimate plus correction is enough -- and stays O(1) for a task that
+// has been open for years.
+function latestIndex(r: Reminder, nowMillis: number, repeat: RepeatConfig): number {
+	const at = (i: number) => occurrenceMillis(r, i, repeat);
+	// The estimate can be off by a day either way: DST makes some days 23h/25h
+	// long, and `atHour` shifts every repeat off the original time of day.
+	let index = Math.floor((nowMillis - r.fireMillis) / DAY_MS);
+	while (index > 0 && at(index) > nowMillis) index--;
+	while (at(index + 1) <= nowMillis) index++;
+	return index;
+}
+
+function beyondMaxDays(index: number, repeat: RepeatConfig): boolean {
+	return repeat.maxDays !== null && index > repeat.maxDays;
+}
+
+// The firing that is currently due, or null if none is (not due yet, or the
+// task has been nagged about for longer than `maxDays`).
+export function dueOccurrence(
+	r: Reminder,
+	nowMillis: number,
+	repeat: RepeatConfig
+): Occurrence | null {
+	if (nowMillis < r.fireMillis) return null;
+	if (!repeats(r, repeat)) return { index: 0, millis: r.fireMillis };
+	const index = latestIndex(r, nowMillis, repeat);
+	if (beyondMaxDays(index, repeat)) return null;
+	return { index, millis: occurrenceMillis(r, index, repeat) };
+}
+
+// The next firing strictly after `nowMillis`, or null if there will be none.
+// Used by --list to show what is still coming.
+export function nextOccurrence(
+	r: Reminder,
+	nowMillis: number,
+	repeat: RepeatConfig
+): Occurrence | null {
+	if (nowMillis < r.fireMillis) return { index: 0, millis: r.fireMillis };
+	if (!repeats(r, repeat)) return null;
+	const index = latestIndex(r, nowMillis, repeat) + 1;
+	if (beyondMaxDays(index, repeat)) return null;
+	return { index, millis: occurrenceMillis(r, index, repeat) };
 }
 
 function pad(n: number): string {
@@ -131,6 +219,10 @@ export function extractReminders(
 			fireMillis: fire.toMillis(),
 			fireISO,
 			eventHuman: humanEvent(year, month, day, parsed.hasTime, hour, minute, parsed.tz, defaultZone),
+			zone: parsed.tz ?? defaultZone,
+			// The line is a task and (checked above) not completed, so keep
+			// nagging once a day until it is.
+			repeatDaily: isTaskLine(lineText),
 		});
 	}
 	return out;

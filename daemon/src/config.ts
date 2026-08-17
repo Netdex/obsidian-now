@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as dotenv from "dotenv";
 import { CouchConfig } from "./couchSource";
+import { DEFAULT_REPEAT, RepeatConfig } from "./reminders";
 
 export interface PushoverConfig {
 	token: string;
@@ -21,6 +22,13 @@ export interface Config {
 	timezone: string | null;
 	// How often to poll for changes + evaluate due reminders.
 	tickIntervalMs: number;
+	// How often to re-read the whole vault instead of polling changes, so a
+	// stale/invalid change cursor cannot silently freeze the index. 0 disables.
+	rescanIntervalMs: number;
+	// Glob patterns (vault-relative) whose notes are never scanned.
+	ignorePaths: string[];
+	// How reminders on open tasks repeat until the task is completed.
+	repeat: RepeatConfig;
 	// A reminder overdue by more than this is marked handled without notifying
 	// (avoids a burst of stale alerts on first run).
 	missedGraceMs: number;
@@ -35,8 +43,27 @@ const DEFAULTS = {
 	statePath: "./state.json",
 	timezone: null as string | null,
 	tickIntervalMs: 30000,
+	rescanIntervalMs: 60 * 60 * 1000,
 	missedGraceMs: 24 * 60 * 60 * 1000,
 };
+
+// Reads the `repeat` block, falling back to DEFAULT_REPEAT per key so a config
+// that sets only one of them keeps the defaults for the rest.
+function loadRepeat(raw: Partial<RepeatConfig> | undefined): RepeatConfig {
+	const repeat: RepeatConfig = {
+		enabled: raw?.enabled ?? DEFAULT_REPEAT.enabled,
+		atHour: raw?.atHour === undefined ? DEFAULT_REPEAT.atHour : raw.atHour,
+		maxDays: raw?.maxDays === undefined ? DEFAULT_REPEAT.maxDays : raw.maxDays,
+	};
+	const { atHour, maxDays } = repeat;
+	if (atHour !== null && (!Number.isInteger(atHour) || atHour < 0 || atHour > 23)) {
+		throw new Error(`repeat.atHour must be an integer 0-23 or null (got ${atHour})`);
+	}
+	if (maxDays !== null && (!Number.isInteger(maxDays) || maxDays < 0)) {
+		throw new Error(`repeat.maxDays must be a non-negative integer or null (got ${maxDays})`);
+	}
+	return repeat;
+}
 
 export interface LoadOptions {
 	configPath?: string;
@@ -91,7 +118,10 @@ export function loadConfig(opts: LoadOptions = {}): Config {
 			: path.join(path.dirname(statePath), "heartbeat"),
 		timezone: raw.timezone ?? DEFAULTS.timezone,
 		tickIntervalMs: raw.tickIntervalMs ?? DEFAULTS.tickIntervalMs,
+		rescanIntervalMs: raw.rescanIntervalMs ?? DEFAULTS.rescanIntervalMs,
 		missedGraceMs: raw.missedGraceMs ?? DEFAULTS.missedGraceMs,
+		ignorePaths: raw.ignorePaths ?? [],
+		repeat: loadRepeat(raw.repeat),
 		obsidianVault: raw.obsidianVault ?? null,
 		pushover,
 		dryRun,

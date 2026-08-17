@@ -109,9 +109,17 @@ and must stay visually consistent; both build on `formatPill` from datecore.
 
 - **`daemon.ts`** - `ReminderDaemon`. `scanAll()` builds an in-memory index of
   reminders keyed by CouchDB doc id; a ticker polls the `_changes` feed
-  (`tickIntervalMs`), updates the index, then fires due reminders. De-duplicates
-  via `State` so it never double-notifies across restarts; suppresses reminders
-  overdue by more than `missedGraceMs` (stale-burst guard on first run).
+  (`tickIntervalMs`), updates the index, then fires due reminders, with a full
+  rescan every `rescanIntervalMs` so a stale change cursor cannot freeze the
+  index. De-duplicates via `State` so it never double-notifies across restarts;
+  suppresses reminders overdue by more than `missedGraceMs` (stale-burst guard
+  on first run). A reminder on an open task repeats daily (`dueOccurrence`,
+  tuned by `config.repeat`); each day's occurrence gets its own state key
+  (`<id>#<n>`). Everything due in one tick is coalesced into a single Pushover
+  digest. The constructor takes an optional sender and `evaluate(now)` an
+  optional clock, which is how `test/daemon.test.ts` drives it without CouchDB.
+- **`pathFilter.ts`** - the `config.ignorePaths` glob matcher (templates,
+  archives) applied to every note before it is scanned.
 - **`couchSource.ts`** - read-only CouchDB access; reconstructs note text from
   LiveSync's chunked documents. **Only ever issues reads** (`_all_docs`,
   `_bulk_get`, `_changes`). Plaintext vaults only - no E2E encryption or path

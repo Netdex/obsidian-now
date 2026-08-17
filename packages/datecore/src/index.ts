@@ -146,6 +146,12 @@ export function isCompletedTaskLine(lineText: string): boolean {
 	return m !== null && m[1].toLowerCase() === "x";
 }
 
+// Whether a line is a task checkbox at all, in any state. The daemon uses this
+// to repeat a task's reminder daily until the task is completed.
+export function isTaskLine(lineText: string): boolean {
+	return TASK_CHECKBOX_REGEX.test(lineText);
+}
+
 export const MONTH_NAMES_FULL = [
 	"January", "February", "March", "April", "May", "June",
 	"July", "August", "September", "October", "November", "December",
